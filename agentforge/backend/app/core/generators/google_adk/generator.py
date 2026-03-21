@@ -478,7 +478,11 @@ class GoogleADKGenerator:
         # BFS from entry
         ordered: list[str] = []
         visited: set[str] = set()
-        queue = [ir.workflow.entry_node] if ir.workflow.entry_node else []
+        entry = ir.workflow.entry_node
+        if not entry:
+            entry_nodes = [n for n in ir.workflow.nodes if n.type == "entry"]
+            entry = entry_nodes[0].id if entry_nodes else None
+        queue = [entry] if entry else []
 
         while queue:
             node_id = queue.pop(0)

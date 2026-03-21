@@ -248,15 +248,23 @@ def _validate_graph(ir: IRDocument, result: ValidationResult) -> None:
 
     node_ids = {n.id for n in nodes}
 
-    # Must have entry node
+    # Auto-detect entry_node from node types if not explicitly set
     if not ir.workflow.entry_node:
-        result.add_error(stage, "Workflow has no entry node", "workflow.entry_node")
-        return
+        entry_nodes = [n for n in nodes if n.type == "entry"]
+        if entry_nodes:
+            ir.workflow.entry_node = entry_nodes[0].id
+        else:
+            result.add_error(stage, "Workflow has no entry node", "workflow.entry_node")
+            return
 
-    # Must have at least one exit node
+    # Auto-detect exit_nodes from node types if not explicitly set
     if not ir.workflow.exit_nodes:
-        result.add_error(stage, "Workflow has no exit nodes", "workflow.exit_nodes")
-        return
+        exit_nodes = [n.id for n in nodes if n.type == "exit"]
+        if exit_nodes:
+            ir.workflow.exit_nodes = exit_nodes
+        else:
+            result.add_error(stage, "Workflow has no exit nodes", "workflow.exit_nodes")
+            return
 
     # Build adjacency list
     adjacency: dict[str, list[str]] = {nid: [] for nid in node_ids}

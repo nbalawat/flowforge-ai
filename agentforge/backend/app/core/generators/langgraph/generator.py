@@ -433,9 +433,14 @@ class LangGraphGenerator:
         # Add edges
         lines.append("    # Add edges")
 
-        # Entry edge
-        if ir.workflow.entry_node:
-            entry_target = node_to_func.get(ir.workflow.entry_node, "")
+        # Entry edge — auto-detect if not set
+        entry_node_id = ir.workflow.entry_node
+        if not entry_node_id:
+            entry_nodes = [n for n in ir.workflow.nodes if n.type == "entry"]
+            entry_node_id = entry_nodes[0].id if entry_nodes else None
+
+        if entry_node_id:
+            entry_target = node_to_func.get(entry_node_id, "")
             if entry_target and not entry_target.startswith("__condition_"):
                 lines.append(f'    graph.add_edge(START, "{entry_target}")')
 

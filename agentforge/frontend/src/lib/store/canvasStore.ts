@@ -326,7 +326,6 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
     const nodeId = `node_${uuidv4().slice(0, 8)}`;
 
     const agent: AgentDefinition = {
-      id: agentId,
       name: agentPartial.name || "New Agent",
       type: agentPartial.type || "llm",
       role: agentPartial.role || "",
@@ -375,7 +374,6 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
     const nodeId = `node_${uuidv4().slice(0, 8)}`;
 
     const tool: ToolDefinition = {
-      id: toolId,
       name: toolPartial.name || "New Tool",
       description: toolPartial.description || "",
       type: toolPartial.type || "function",
