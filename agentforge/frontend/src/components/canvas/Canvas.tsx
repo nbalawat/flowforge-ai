@@ -208,9 +208,17 @@ export function Canvas() {
         style: { stroke: "#6366f1", strokeWidth: 2 },
       }}
     >
-      <Background variant={BackgroundVariant.Dots} gap={20} size={1} color="#1e1e3a" />
-      <Controls />
+      <Background variant={BackgroundVariant.Dots} gap={20} size={1} color="#2a2a4a" />
+      <Controls
+        showZoom={true}
+        showFitView={true}
+        showInteractive={true}
+        position="bottom-left"
+      />
       <MiniMap
+        pannable
+        zoomable
+        nodeStrokeWidth={3}
         nodeColor={(node) => {
           switch (node.type) {
             case "agent": return "#3b82f6";
@@ -219,8 +227,18 @@ export function Canvas() {
             case "human_input": return "#22c55e";
             case "entry": return "#10b981";
             case "exit": return "#f43f5e";
+            case "loop": return "#ec4899";
+            case "parallel_fan_out": return "#06b6d4";
+            case "parallel_fan_in": return "#06b6d4";
+            case "subworkflow": return "#f97316";
             default: return "#6366f1";
           }
+        }}
+        maskColor="rgba(15, 15, 30, 0.7)"
+        style={{
+          backgroundColor: "#16162a",
+          border: "1px solid #3a3a6a",
+          borderRadius: "8px",
         }}
       />
     </ReactFlow>

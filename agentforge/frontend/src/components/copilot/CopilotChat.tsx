@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import { useCanvasStore } from "@/lib/store/canvasStore";
 import { sendCopilotMessage } from "@/lib/api/copilot";
 import { applyIRPatches } from "@/lib/ir/patchApplier";
+import { processLocally } from "@/lib/copilot/localCopilot";
 
 interface ChatMessage {
   id: string;
@@ -52,6 +53,7 @@ export function CopilotChat() {
     setIsLoading(true);
 
     try {
+      // Try the Claude API backend first
       const response = await sendCopilotMessage(
         irDocument.metadata.id,
         userInput,
@@ -60,13 +62,16 @@ export function CopilotChat() {
       );
 
       if (response.error) {
+        // API unavailable — fall back to local copilot
+        const localResult = processLocally(userInput, irDocument);
         setMessages((prev) => [
           ...prev,
           {
             id: `msg_${Date.now()}`,
             role: "assistant",
-            content: response.error || "An error occurred.",
+            content: localResult.text,
             timestamp: new Date(),
+            patchDescriptions: localResult.actionsApplied,
           },
         ]);
         return;
@@ -78,7 +83,6 @@ export function CopilotChat() {
         patchDescriptions = applyIRPatches(response.patches);
       }
 
-      // Add assistant response
       const assistantMessage: ChatMessage = {
         id: `msg_${Date.now()}`,
         role: "assistant",
@@ -87,16 +91,17 @@ export function CopilotChat() {
         patchDescriptions,
       };
       setMessages((prev) => [...prev, assistantMessage]);
-    } catch (error) {
+    } catch {
+      // Network error — fall back to local copilot
+      const localResult = processLocally(userInput, irDocument);
       setMessages((prev) => [
         ...prev,
         {
           id: `msg_${Date.now()}`,
           role: "assistant",
-          content:
-            "Could not reach the copilot service. Make sure the backend is running " +
-            "and ANTHROPIC_API_KEY is set in your .env file.",
+          content: localResult.text,
           timestamp: new Date(),
+          patchDescriptions: localResult.actionsApplied,
         },
       ]);
     } finally {

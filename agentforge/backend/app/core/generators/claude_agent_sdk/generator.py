@@ -19,7 +19,7 @@ from __future__ import annotations
 
 from textwrap import dedent
 
-from ...core.ir.schema import (
+from ...ir.schema import (
     AgentDefinition,
     FieldType,
     HookTrigger,
@@ -30,7 +30,7 @@ from ...core.ir.schema import (
     ToolDefinition,
     WorkflowType,
 )
-from ...core.ir.validation import ValidationIssue, ValidationSeverity
+from ...ir.validation import ValidationIssue, ValidationSeverity
 from ..base import (
     CloudTarget,
     DeployArtifact,

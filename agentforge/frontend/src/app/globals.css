@@ -17,17 +17,73 @@ body {
   color: var(--text-primary);
 }
 
-/* React Flow overrides */
+/* ============================================================
+   React Flow theme overrides — make controls & minimap visible
+   ============================================================ */
+
+/* Background */
 .react-flow__background {
   background-color: var(--bg-primary) !important;
 }
 
-.react-flow__controls button {
-  background-color: var(--bg-surface) !important;
-  border-color: var(--border-color) !important;
-  color: var(--text-primary) !important;
+/* Controls (zoom in/out/fit) — bright so they're visible */
+.react-flow__controls {
+  background-color: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
 }
 
+.react-flow__controls button {
+  background-color: #2a2a4a !important;
+  border: 1px solid #4a4a7a !important;
+  border-radius: 6px !important;
+  color: #ffffff !important;
+  fill: #ffffff !important;
+  width: 32px !important;
+  height: 32px !important;
+  margin-bottom: 4px !important;
+}
+
+.react-flow__controls button:hover {
+  background-color: #3a3a6a !important;
+  border-color: var(--accent) !important;
+}
+
+.react-flow__controls button svg {
+  fill: #ffffff !important;
+}
+
+/* MiniMap — make visible with contrast */
 .react-flow__minimap {
-  background-color: var(--bg-secondary) !important;
+  background-color: #1a1a2e !important;
+  border: 1px solid #3a3a6a !important;
+  border-radius: 8px !important;
+  overflow: hidden !important;
+}
+
+.react-flow__minimap-mask {
+  fill: rgba(100, 100, 200, 0.15) !important;
+  stroke: rgba(150, 150, 255, 0.3) !important;
+  stroke-width: 1 !important;
+}
+
+.react-flow__minimap svg {
+  background-color: #12122a !important;
+}
+
+/* Edge labels */
+.react-flow__edge-text {
+  fill: #ddd !important;
+  font-size: 11px !important;
+}
+
+/* Selection box */
+.react-flow__selection {
+  border: 1px dashed var(--accent) !important;
+  background: rgba(233, 69, 96, 0.08) !important;
+}
+
+/* Attribution (React Flow watermark) */
+.react-flow__attribution {
+  display: none !important;
 }

@@ -42,7 +42,7 @@ export function CodePreview() {
           setIsOpen(true);
           handleGenerate();
         }}
-        className="fixed bottom-4 right-4 px-4 py-2 bg-[var(--accent)] text-white rounded-lg shadow-lg text-sm font-medium hover:bg-[var(--accent)]/90 z-50"
+        className="fixed bottom-4 left-20 px-4 py-2 bg-[var(--accent)] text-white rounded-lg shadow-lg text-sm font-medium hover:bg-[var(--accent)]/90 z-50"
       >
         Generate Code
       </button>

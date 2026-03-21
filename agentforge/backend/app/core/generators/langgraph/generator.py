@@ -21,7 +21,7 @@ from __future__ import annotations
 import operator
 from textwrap import dedent, indent
 
-from ...core.ir.schema import (
+from ...ir.schema import (
     AgentDefinition,
     EdgeType,
     FieldType,
@@ -32,7 +32,7 @@ from ...core.ir.schema import (
     ToolDefinition,
     WorkflowType,
 )
-from ...core.ir.validation import ValidationIssue, ValidationSeverity
+from ...ir.validation import ValidationIssue, ValidationSeverity
 from ..base import (
     CloudTarget,
     DeployArtifact,
@@ -134,16 +134,11 @@ class LangGraphGenerator:
         return artifact
 
     def generate_tests(self, ir: IRDocument) -> TestArtifact:
+        from ..base import GeneratedFile as GF
+
         name = sanitize_identifier(ir.metadata.name)
         artifact = TestArtifact()
-
-        artifact.files.append(
-            __import__("agentforge.backend.app.core.generators.base", fromlist=["GeneratedFile"]).GeneratedFile(
-                path=f"{name}/tests/__init__.py",
-                content="",
-            )
-        )
-
+        artifact.files.append(GF(path=f"{name}/tests/__init__.py", content=""))
         return artifact
 
     def generate_deployment(
