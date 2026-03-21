@@ -230,7 +230,9 @@ class GoogleADKGenerator:
                 instruction_parts.append(f"Background: {agent.backstory}")
             if agent.instructions:
                 instruction_parts.append(agent.instructions)
-            instruction = "\\n\\n".join(instruction_parts) or f"You are the {agent.name} agent."
+            instruction = "\n\n".join(instruction_parts) or f"You are the {agent.name} agent."
+            # Escape for triple-quoted string
+            instruction_escaped = instruction.replace('"""', '\\"\\"\\"')
 
             # Agent-specific model override
             agent_model = model_str
@@ -247,10 +249,13 @@ class GoogleADKGenerator:
 
             tools_str = f"[{', '.join(agent_tools)}]" if agent_tools else "[]"
 
+            # ADK requires name to be a valid Python identifier (no spaces)
+            safe_name = sanitize_identifier(agent.name)
+
             lines.append(f"{var_name} = LlmAgent(")
-            lines.append(f'    name="{agent.name}",')
+            lines.append(f'    name="{safe_name}",')
             lines.append(f'    model="{agent_model}",')
-            lines.append(f'    instruction="{instruction}",')
+            lines.append(f'    instruction="""{instruction_escaped}""",')
             if agent_tools:
                 lines.append(f"    tools={tools_str},")
             lines.append(")")
@@ -275,9 +280,10 @@ class GoogleADKGenerator:
         if not agent_list:
             # No agents, create a simple root
             lines.append("root_agent = LlmAgent(")
-            lines.append(f'    name="{ir.metadata.name or project_name}",')
+            safe_root_name = sanitize_identifier(ir.metadata.name or project_name)
+            lines.append(f'    name="{safe_root_name}",')
             lines.append(f'    model="{model_str}",')
-            lines.append(f'    instruction="You are the {ir.metadata.name} assistant.",')
+            lines.append(f'    instruction="You are the {safe_root_name} assistant.",')
             lines.append(")")
         elif wf_type == WorkflowType.SEQUENTIAL:
             lines.append("root_agent = SequentialAgent(")
