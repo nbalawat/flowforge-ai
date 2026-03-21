@@ -20,6 +20,12 @@ import type {
 // Store types
 // ============================================================================
 
+interface SavedProject {
+  id: string;
+  name: string;
+  savedAt: string;
+}
+
 interface CanvasState {
   // Core IR document
   irDocument: IRDocument | null;
@@ -33,9 +39,30 @@ interface CanvasState {
   isCopilotOpen: boolean;
   selectedFramework: TargetFramework;
 
+  // Undo/redo history
+  undoStack: IRDocument[];
+  redoStack: IRDocument[];
+
   // Actions: IR document
   setIRDocument: (ir: IRDocument) => void;
   createNewProject: (name: string, description?: string) => void;
+
+  // Actions: Project management
+  saveProject: () => void;
+  loadProject: (id: string) => void;
+  listSavedProjects: () => SavedProject[];
+  deleteSavedProject: (id: string) => void;
+  clearCanvas: () => void;
+  renameProject: (name: string) => void;
+
+  // Actions: Undo/Redo
+  undo: () => void;
+  redo: () => void;
+  pushUndo: () => void;
+
+  // Actions: Export/Import
+  exportIR: () => string;
+  importIR: (json: string) => boolean;
 
   // Actions: Nodes
   addAgentNode: (agent: Partial<AgentDefinition>, position: { x: number; y: number }) => void;
@@ -135,6 +162,9 @@ function createDefaultIR(name: string, description: string = ""): IRDocument {
 // Store implementation
 // ============================================================================
 
+const STORAGE_KEY = "agentforge_projects";
+const MAX_UNDO = 50;
+
 export const useCanvasStore = create<CanvasState>((set, get) => ({
   irDocument: null,
   selectedNodeId: null,
@@ -142,15 +172,155 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
   isLoading: false,
   isCopilotOpen: true,
   selectedFramework: "langgraph",
+  undoStack: [],
+  redoStack: [],
 
   setIRDocument: (ir) => set({ irDocument: ir }),
 
   createNewProject: (name, description) =>
-    set({ irDocument: createDefaultIR(name, description) }),
+    set({
+      irDocument: createDefaultIR(name, description),
+      undoStack: [],
+      redoStack: [],
+      selectedNodeId: null,
+      selectedEdgeId: null,
+    }),
+
+  // ── Project management ───────────────────────────────────
+  saveProject: () => {
+    const { irDocument } = get();
+    if (!irDocument || typeof window === "undefined") return;
+
+    const saved = JSON.parse(window.localStorage.getItem(STORAGE_KEY) || "{}");
+    saved[irDocument.metadata.id] = {
+      ir: irDocument,
+      savedAt: new Date().toISOString(),
+    };
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(saved));
+  },
+
+  loadProject: (id: string) => {
+    if (typeof window === "undefined") return;
+    const saved = JSON.parse(window.localStorage.getItem(STORAGE_KEY) || "{}");
+    const project = saved[id];
+    if (project) {
+      set({
+        irDocument: project.ir,
+        undoStack: [],
+        redoStack: [],
+        selectedNodeId: null,
+        selectedEdgeId: null,
+      });
+    }
+  },
+
+  listSavedProjects: (): SavedProject[] => {
+    if (typeof window === "undefined") return [];
+    const saved = JSON.parse(window.localStorage.getItem(STORAGE_KEY) || "{}");
+    return Object.entries(saved).map(([id, data]: [string, any]) => ({
+      id,
+      name: data.ir?.metadata?.name || "Untitled",
+      savedAt: data.savedAt || "",
+    }));
+  },
+
+  deleteSavedProject: (id: string) => {
+    if (typeof window === "undefined") return;
+    const saved = JSON.parse(window.localStorage.getItem(STORAGE_KEY) || "{}");
+    delete saved[id];
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(saved));
+  },
+
+  clearCanvas: () => {
+    const { irDocument, pushUndo } = get();
+    if (!irDocument) return;
+    pushUndo();
+    set({
+      irDocument: createDefaultIR(
+        irDocument.metadata.name,
+        irDocument.metadata.description
+      ),
+      selectedNodeId: null,
+      selectedEdgeId: null,
+    });
+  },
+
+  renameProject: (name: string) => {
+    const { irDocument } = get();
+    if (!irDocument) return;
+    set({
+      irDocument: {
+        ...irDocument,
+        metadata: { ...irDocument.metadata, name, updated_at: new Date().toISOString() },
+      },
+    });
+  },
+
+  // ── Undo / Redo ──────────────────────────────────────────
+  pushUndo: () => {
+    const { irDocument, undoStack } = get();
+    if (!irDocument) return;
+    const newStack = [...undoStack, JSON.parse(JSON.stringify(irDocument))];
+    if (newStack.length > MAX_UNDO) newStack.shift();
+    set({ undoStack: newStack, redoStack: [] });
+  },
+
+  undo: () => {
+    const { irDocument, undoStack, redoStack } = get();
+    if (undoStack.length === 0) return;
+    const previous = undoStack[undoStack.length - 1];
+    const newUndoStack = undoStack.slice(0, -1);
+    const newRedoStack = irDocument
+      ? [...redoStack, JSON.parse(JSON.stringify(irDocument))]
+      : redoStack;
+    set({
+      irDocument: previous,
+      undoStack: newUndoStack,
+      redoStack: newRedoStack,
+      selectedNodeId: null,
+      selectedEdgeId: null,
+    });
+  },
+
+  redo: () => {
+    const { irDocument, undoStack, redoStack } = get();
+    if (redoStack.length === 0) return;
+    const next = redoStack[redoStack.length - 1];
+    const newRedoStack = redoStack.slice(0, -1);
+    const newUndoStack = irDocument
+      ? [...undoStack, JSON.parse(JSON.stringify(irDocument))]
+      : undoStack;
+    set({
+      irDocument: next,
+      undoStack: newUndoStack,
+      redoStack: newRedoStack,
+      selectedNodeId: null,
+      selectedEdgeId: null,
+    });
+  },
+
+  // ── Export / Import ──────────────────────────────────────
+  exportIR: (): string => {
+    const { irDocument } = get();
+    return JSON.stringify(irDocument, null, 2);
+  },
+
+  importIR: (json: string): boolean => {
+    try {
+      const ir = JSON.parse(json) as IRDocument;
+      if (!ir.ir_version || !ir.metadata || !ir.workflow) return false;
+      get().pushUndo();
+      set({ irDocument: ir, selectedNodeId: null, selectedEdgeId: null });
+      return true;
+    } catch {
+      return false;
+    }
+  },
 
   addAgentNode: (agentPartial, position) => {
     const state = get();
     if (!state.irDocument) return;
+    get().pushUndo();
 
     const agentId = `agent_${uuidv4().slice(0, 8)}`;
     const nodeId = `node_${uuidv4().slice(0, 8)}`;
@@ -199,6 +369,7 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
   addToolNode: (toolPartial, position) => {
     const state = get();
     if (!state.irDocument) return;
+    get().pushUndo();
 
     const toolId = `tool_${uuidv4().slice(0, 8)}`;
     const nodeId = `node_${uuidv4().slice(0, 8)}`;
@@ -237,6 +408,7 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
   addConditionNode: (expression, position) => {
     const state = get();
     if (!state.irDocument) return;
+    get().pushUndo();
 
     const nodeId = `node_${uuidv4().slice(0, 8)}`;
     const node: WorkflowNode = {
@@ -261,6 +433,7 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
   addHumanInputNode: (prompt, position) => {
     const state = get();
     if (!state.irDocument) return;
+    get().pushUndo();
 
     const nodeId = `node_${uuidv4().slice(0, 8)}`;
     const node: WorkflowNode = {
@@ -308,6 +481,7 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
   removeNode: (nodeId) => {
     const state = get();
     if (!state.irDocument) return;
+    get().pushUndo();
 
     set({
       irDocument: {
@@ -368,6 +542,7 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
   removeEdge: (edgeId) => {
     const state = get();
     if (!state.irDocument) return;
+    get().pushUndo();
 
     set({
       irDocument: {

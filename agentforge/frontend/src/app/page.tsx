@@ -1,22 +1,77 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useCallback } from "react";
 import { Canvas } from "@/components/canvas/Canvas";
 import { Toolbar } from "@/components/canvas/Toolbar";
 import { PropertiesPanel } from "@/components/panels/PropertiesPanel";
 import { CopilotChat } from "@/components/copilot/CopilotChat";
 import { CodePreview } from "@/components/generation/CodePreview";
+import { HeaderActions } from "@/components/common/HeaderActions";
 import { useCanvasStore } from "@/lib/store/canvasStore";
 
 export default function Home() {
-  const { irDocument, createNewProject, isCopilotOpen, toggleCopilot } =
-    useCanvasStore();
+  const {
+    irDocument,
+    createNewProject,
+    isCopilotOpen,
+    toggleCopilot,
+    undo,
+    redo,
+    saveProject,
+    selectedNodeId,
+    removeNode,
+  } = useCanvasStore();
 
+  // Initialize project on first load
   useEffect(() => {
     if (!irDocument) {
       createNewProject("My Agent Workflow", "A new agentic workflow");
     }
   }, [irDocument, createNewProject]);
+
+  // Keyboard shortcuts
+  const handleKeyDown = useCallback(
+    (e: KeyboardEvent) => {
+      const isCmd = e.metaKey || e.ctrlKey;
+
+      // Ctrl+Z — Undo
+      if (isCmd && !e.shiftKey && e.key === "z") {
+        e.preventDefault();
+        undo();
+      }
+
+      // Ctrl+Shift+Z — Redo
+      if (isCmd && e.shiftKey && e.key === "z") {
+        e.preventDefault();
+        redo();
+      }
+
+      // Ctrl+S — Save
+      if (isCmd && e.key === "s") {
+        e.preventDefault();
+        saveProject();
+      }
+
+      // Delete / Backspace — Remove selected node
+      if ((e.key === "Delete" || e.key === "Backspace") && selectedNodeId) {
+        // Don't delete if focused on an input
+        const target = e.target as HTMLElement;
+        if (target.tagName === "INPUT" || target.tagName === "TEXTAREA") return;
+
+        const node = irDocument?.workflow.nodes.find((n) => n.id === selectedNodeId);
+        if (node && node.type !== "entry" && node.type !== "exit") {
+          e.preventDefault();
+          removeNode(selectedNodeId);
+        }
+      }
+    },
+    [undo, redo, saveProject, selectedNodeId, removeNode, irDocument]
+  );
+
+  useEffect(() => {
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [handleKeyDown]);
 
   return (
     <div className="h-screen flex flex-col">
@@ -26,9 +81,7 @@ export default function Home() {
           <h1 className="text-lg font-semibold text-[var(--accent)]">
             AgentForge
           </h1>
-          <span className="text-sm text-[var(--text-secondary)]">
-            {irDocument?.metadata.name || "Untitled"}
-          </span>
+          <HeaderActions />
         </div>
         <div className="flex items-center gap-2">
           <button
