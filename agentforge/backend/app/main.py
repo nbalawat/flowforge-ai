@@ -11,7 +11,7 @@ The backend handles:
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from .api.v1 import copilot, generation, ir, projects
+from .api.v1 import copilot, execution, generation, ir, projects
 from .config import settings
 
 app = FastAPI(
@@ -34,6 +34,7 @@ app.include_router(projects.router, prefix="/api/v1/projects", tags=["projects"]
 app.include_router(ir.router, prefix="/api/v1/ir", tags=["ir"])
 app.include_router(generation.router, prefix="/api/v1/generation", tags=["generation"])
 app.include_router(copilot.router, prefix="/api/v1/copilot", tags=["copilot"])
+app.include_router(execution.router, prefix="/api/v1/execution", tags=["execution"])
 
 
 @app.get("/health")

@@ -5,7 +5,7 @@ import { Canvas } from "@/components/canvas/Canvas";
 import { Toolbar } from "@/components/canvas/Toolbar";
 import { PropertiesPanel } from "@/components/panels/PropertiesPanel";
 import { CopilotChat } from "@/components/copilot/CopilotChat";
-import { CodePreview } from "@/components/generation/CodePreview";
+import { TestRunner } from "@/components/generation/TestRunner";
 import { HeaderActions } from "@/components/common/HeaderActions";
 import { useCanvasStore } from "@/lib/store/canvasStore";
 
@@ -114,8 +114,8 @@ export default function Home() {
         {isCopilotOpen && <CopilotChat />}
       </div>
 
-      {/* Code Generation Preview */}
-      <CodePreview />
+      {/* Test Runner & Code Generation */}
+      <TestRunner />
     </div>
   );
 }

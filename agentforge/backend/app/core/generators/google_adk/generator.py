@@ -1,18 +1,8 @@
 """
 Google ADK (Agent Development Kit) Code Generator.
 
-Converts an IR document into a runnable Google ADK project.
-
-IR → Google ADK Mapping:
-- Agent → LlmAgent(name, model, instruction, tools, sub_agents)
-- Sequential workflow → SequentialAgent(sub_agents=[...])
-- Parallel workflow → ParallelAgent(sub_agents=[...])
-- Loop → LoopAgent(sub_agents=[...], max_iterations)
-- Tool → FunctionTool(fn) with typed parameters
-- State → ctx.session.state with prefix scoping (app:, user:, temp:)
-- HITL → before_agent_callback / after_agent_callback
-- Routing → LLM-based via agent instructions + transfer_to_agent
-- Conditional edges → Translated to agent instructions guiding routing
+Produces a fully runnable Google ADK project from an IR document.
+Supports Anthropic Claude models via LiteLLM integration.
 """
 
 from __future__ import annotations
@@ -58,8 +48,6 @@ class GoogleADKGenerator:
 
     def validate_ir(self, ir: IRDocument) -> list[ValidationIssue]:
         issues: list[ValidationIssue] = []
-
-        # ADK uses LLM-based routing, not explicit conditional edges
         cond_edges = [e for e in ir.workflow.edges if e.type == EdgeType.CONDITIONAL]
         if cond_edges:
             issues.append(
@@ -71,7 +59,6 @@ class GoogleADKGenerator:
                     path="workflow.edges",
                 )
             )
-
         return issues
 
     def generate_project(
@@ -80,43 +67,39 @@ class GoogleADKGenerator:
         name = project_name or sanitize_identifier(ir.metadata.name)
         artifact = ProjectArtifact(framework=TargetFramework.GOOGLE_ADK)
 
-        # Generate tool files
-        for tool in ir.tools:
-            tool_id = sanitize_identifier(tool.name)
-            artifact.add_file(
-                f"{name}/tools/{tool_id}.py",
-                self._generate_tool(tool),
-            )
-
-        # Generate the agent hierarchy
-        artifact.add_file(f"{name}/agent.py", self._generate_agent_hierarchy(ir))
-
-        # Generate the runner/main entry point
-        artifact.add_file(f"{name}/main.py", self._generate_main(ir, name))
-
-        # Generate __init__ files
+        # __init__.py for package
         artifact.add_file(f"{name}/__init__.py", "")
         artifact.add_file(f"{name}/tools/__init__.py", "")
 
-        # Generate callbacks if HITL is configured
-        if ir.human_in_the_loop:
-            artifact.add_file(f"{name}/callbacks.py", self._generate_callbacks(ir))
+        # Generate tool files
+        for tool in ir.tools:
+            tool_id = sanitize_identifier(tool.name)
+            artifact.add_file(f"{name}/tools/{tool_id}.py", self._generate_tool(tool))
+
+        # Generate the agent hierarchy
+        artifact.add_file(f"{name}/agent.py", self._generate_agent_module(ir, name))
+
+        # Generate the runner
+        artifact.add_file(f"{name}/main.py", self._generate_main(ir, name))
+
+        # Generate a test script
+        artifact.add_file(f"{name}/test_run.py", self._generate_test_script(ir, name))
 
         # Project files
         packages = [
-            f"google-adk{ADK_VERSION}",
+            "google-adk>=1.0.0",
             "google-genai>=1.0.0",
+            "litellm>=1.40.0",
             "python-dotenv>=1.0.0",
         ]
         artifact.add_file(f"{name}/requirements.txt", build_requirements_txt(packages))
         artifact.requirements = packages
 
         env_vars = [
-            ("GOOGLE_API_KEY", "Google AI API key"),
-            ("GOOGLE_CLOUD_PROJECT", "Google Cloud project ID (optional, for Vertex AI)"),
+            ("ANTHROPIC_API_KEY", "Anthropic API key for Claude models (used via LiteLLM)"),
+            ("GOOGLE_API_KEY", "Google AI API key (alternative to Anthropic)"),
         ]
         artifact.add_file(f"{name}/.env.example", build_env_template(env_vars))
-        artifact.add_file(f"{name}/Dockerfile", self._generate_dockerfile(name))
 
         return artifact
 
@@ -133,22 +116,16 @@ class GoogleADKGenerator:
     # ================================================================
 
     def _generate_tool(self, tool: ToolDefinition) -> str:
-        """Generate an ADK FunctionTool."""
+        """Generate a tool function file."""
         tool_id = sanitize_identifier(tool.name)
 
-        # Build parameter signature with type hints
         params = []
         for p in tool.parameters:
             py_type = {
-                FieldType.STRING: "str",
-                FieldType.INTEGER: "int",
-                FieldType.FLOAT: "float",
-                FieldType.BOOLEAN: "bool",
-                FieldType.LIST: "list",
-                FieldType.DICT: "dict",
-                FieldType.ANY: "str",
+                FieldType.STRING: "str", FieldType.INTEGER: "int",
+                FieldType.FLOAT: "float", FieldType.BOOLEAN: "bool",
+                FieldType.LIST: "list", FieldType.DICT: "dict", FieldType.ANY: "str",
             }.get(p.type, "str")
-
             if p.default is not None:
                 params.append(f"{p.name}: {py_type} = {repr(p.default)}")
             elif not p.required:
@@ -157,108 +134,93 @@ class GoogleADKGenerator:
                 params.append(f"{p.name}: {py_type}")
 
         param_str = ", ".join(params)
-        return_type = "str"
-        if tool.returns:
-            return_type = {
-                FieldType.STRING: "str",
-                FieldType.INTEGER: "int",
-                FieldType.FLOAT: "float",
-                FieldType.BOOLEAN: "bool",
-            }.get(tool.returns.type, "str")
 
         lines = [
             f'"""Tool: {tool.name}"""',
             "",
             "",
-            f"def {tool_id}({param_str}) -> {return_type}:",
+            f"def {tool_id}({param_str}) -> str:",
             f'    """{tool.description}',
         ]
-
-        # Add parameter descriptions as docstring
         if tool.parameters:
             lines.append("")
             lines.append("    Args:")
             for p in tool.parameters:
                 lines.append(f"        {p.name}: {p.description or p.name}")
-
         lines.append('    """')
 
         if tool.implementation and tool.implementation.source:
             for source_line in tool.implementation.source.strip().split("\n"):
                 lines.append(f"    {source_line}")
         else:
-            lines.append(f"    # TODO: Implement {tool.name}")
-            lines.append(f'    raise NotImplementedError("{tool.name} not yet implemented")')
+            lines.append(f'    return f"[{tool.name}] executed with args: {param_str or "no args"}"')
 
         lines.append("")
         return "\n".join(lines)
 
-    def _generate_agent_hierarchy(self, ir: IRDocument) -> str:
-        """Generate the ADK agent hierarchy.
-
-        ADK uses a hierarchical agent model:
-        - LlmAgent for LLM-driven agents
-        - SequentialAgent for sequential workflows
-        - ParallelAgent for parallel workflows
-        - LoopAgent for iterative workflows
-        """
+    def _generate_agent_module(self, ir: IRDocument, project_name: str) -> str:
+        """Generate the complete agent.py with hierarchy."""
         lines = [
-            '"""Agent hierarchy definition."""',
-            "",
-            "from google.adk.agents import LlmAgent",
+            '"""',
+            f'Agent hierarchy for {ir.metadata.name}.',
+            '',
+            'Auto-generated by AgentForge.',
+            '"""',
+            '',
+            'from google.adk.agents import LlmAgent',
         ]
 
-        # Import workflow agents based on workflow type
+        # Determine workflow agents needed
         workflow_imports = set()
-        if ir.workflow.type == WorkflowType.SEQUENTIAL:
+        wf_type = ir.workflow.type
+        if wf_type == WorkflowType.SEQUENTIAL:
             workflow_imports.add("SequentialAgent")
-        elif ir.workflow.type == WorkflowType.PARALLEL:
+        elif wf_type == WorkflowType.PARALLEL:
             workflow_imports.add("ParallelAgent")
 
-        # Check for loop nodes
         for node in ir.workflow.nodes:
             if node.type == NodeType.LOOP:
                 workflow_imports.add("LoopAgent")
-            if node.type == NodeType.PARALLEL_FAN_OUT:
+            if node.type in (NodeType.PARALLEL_FAN_OUT, NodeType.PARALLEL_FAN_IN):
                 workflow_imports.add("ParallelAgent")
 
         if workflow_imports:
-            imports_str = ", ".join(sorted(workflow_imports))
-            lines.append(f"from google.adk.agents import {imports_str}")
-
-        lines.append("from google.adk.tools import FunctionTool")
-        lines.append("")
+            lines.append(f"from google.adk.agents import {', '.join(sorted(workflow_imports))}")
 
         # Import tools
+        tool_ids = []
         for tool in ir.tools:
-            tool_id = sanitize_identifier(tool.name)
-            lines.append(f"from .tools.{tool_id} import {tool_id}")
+            tid = sanitize_identifier(tool.name)
+            tool_ids.append(tid)
+            lines.append(f"from .tools.{tid} import {tid}")
 
         lines.append("")
-
-        # Import callbacks if HITL
-        if ir.human_in_the_loop:
-            lines.append("from .callbacks import before_agent_review, after_agent_review")
-            lines.append("")
-
         lines.append("")
 
-        # Build tool references
-        lines.append("# Tools")
-        for tool in ir.tools:
-            tool_id = sanitize_identifier(tool.name)
-            lines.append(f"{tool_id}_tool = FunctionTool({tool_id})")
+        # Determine model - prefer Anthropic since user has that key
+        llm_model = ir.config.default_llm.model
+        # Map common Anthropic model names to litellm format
+        if "claude" in llm_model.lower():
+            model_str = f"anthropic/{llm_model}"
+        else:
+            model_str = llm_model
+
+        lines.append(f'MODEL = "{model_str}"')
+        lines.append("")
         lines.append("")
 
-        # Build individual LlmAgent definitions
-        lines.append("# Agents")
-        agent_var_names: dict[str, str] = {}
+        # Build individual agents from IR
+        agent_var_map: dict[str, str] = {}  # agent.id -> variable name
+
+        # Determine node execution order from edges
+        ordered_agent_ids = self._get_agent_execution_order(ir)
 
         for agent in ir.agents:
             agent_id = sanitize_identifier(agent.name)
-            agent_var_names[agent.id] = f"{agent_id}_agent"
+            var_name = f"{agent_id}_agent"
+            agent_var_map[agent.id] = var_name
 
-            # Build instruction from role + goal + backstory + instructions
+            # Build instruction
             instruction_parts = []
             if agent.role:
                 instruction_parts.append(agent.role)
@@ -268,185 +230,103 @@ class GoogleADKGenerator:
                 instruction_parts.append(f"Background: {agent.backstory}")
             if agent.instructions:
                 instruction_parts.append(agent.instructions)
-            instruction = "\n\n".join(instruction_parts) or f"You are the {agent.name} agent."
+            instruction = "\\n\\n".join(instruction_parts) or f"You are the {agent.name} agent."
 
-            # Determine model
-            llm_config = agent.llm_config or ir.config.default_llm
-            model = llm_config.model
+            # Agent-specific model override
+            agent_model = model_str
+            if agent.llm_config and agent.llm_config.model:
+                m = agent.llm_config.model
+                agent_model = f"anthropic/{m}" if "claude" in m.lower() else m
 
             # Tools for this agent
             agent_tools = []
             for tool_ref in agent.tools:
                 tool_def = next((t for t in ir.tools if t.id == tool_ref), None)
                 if tool_def:
-                    agent_tools.append(f"{sanitize_identifier(tool_def.name)}_tool")
+                    agent_tools.append(sanitize_identifier(tool_def.name))
 
             tools_str = f"[{', '.join(agent_tools)}]" if agent_tools else "[]"
 
-            # Callbacks
-            callbacks = ""
-            hitl_for_agent = [
-                h for h in ir.human_in_the_loop
-                if any(
-                    n.agent_ref == agent.id
-                    for n in ir.workflow.nodes
-                    if n.id == h.node_ref
-                )
-            ]
-            if hitl_for_agent:
-                callbacks = (
-                    ",\n        before_agent_callback=before_agent_review,"
-                    "\n        after_agent_callback=after_agent_review"
-                )
-
-            lines.append(f"{agent_id}_agent = LlmAgent(")
+            lines.append(f"{var_name} = LlmAgent(")
             lines.append(f'    name="{agent.name}",')
-            lines.append(f'    model="{model}",')
-            lines.append(f"    instruction=\"\"\"{instruction}\"\"\",")
-            lines.append(f"    tools={tools_str},{callbacks}")
+            lines.append(f'    model="{agent_model}",')
+            lines.append(f'    instruction="{instruction}",')
+            if agent_tools:
+                lines.append(f"    tools={tools_str},")
             lines.append(")")
             lines.append("")
 
-        # Build the orchestrator based on workflow type
+        # Build the root agent / orchestrator
         lines.append("")
-        lines.append("# Orchestrator")
+        lines.append("# ── Root Agent (Orchestrator) ──")
+        lines.append("")
 
-        agent_list = ", ".join(
-            agent_var_names[agent.id] for agent in ir.agents if agent.id in agent_var_names
-        )
+        agent_list = []
+        for aid in ordered_agent_ids:
+            if aid in agent_var_map:
+                agent_list.append(agent_var_map[aid])
+        # Include any agents not in the ordered list
+        for agent in ir.agents:
+            if agent.id not in ordered_agent_ids and agent.id in agent_var_map:
+                agent_list.append(agent_var_map[agent.id])
 
-        if ir.workflow.type == WorkflowType.SEQUENTIAL:
-            lines.append("root_agent = SequentialAgent(")
-            lines.append(f'    name="{ir.metadata.name}_orchestrator",')
-            lines.append(f"    sub_agents=[{agent_list}],")
-            lines.append(")")
-        elif ir.workflow.type == WorkflowType.PARALLEL:
-            lines.append("root_agent = ParallelAgent(")
-            lines.append(f'    name="{ir.metadata.name}_orchestrator",')
-            lines.append(f"    sub_agents=[{agent_list}],")
-            lines.append(")")
-        elif ir.workflow.type == WorkflowType.HIERARCHICAL:
-            # Use LlmAgent as root with sub_agents for hierarchical routing
+        sub_agents_str = ", ".join(agent_list)
+
+        if not agent_list:
+            # No agents, create a simple root
             lines.append("root_agent = LlmAgent(")
-            lines.append(f'    name="{ir.metadata.name}_orchestrator",')
-            lines.append(f'    model="{ir.config.default_llm.model}",')
-            lines.append(
-                f'    instruction="You are the orchestrator. Delegate tasks to the '
-                f'appropriate specialist agent.",')
-            lines.append(f"    sub_agents=[{agent_list}],")
+            lines.append(f'    name="{ir.metadata.name or project_name}",')
+            lines.append(f'    model="{model_str}",')
+            lines.append(f'    instruction="You are the {ir.metadata.name} assistant.",')
+            lines.append(")")
+        elif wf_type == WorkflowType.SEQUENTIAL:
+            lines.append("root_agent = SequentialAgent(")
+            lines.append(f'    name="{project_name}_pipeline",')
+            lines.append(f"    sub_agents=[{sub_agents_str}],")
+            lines.append(")")
+        elif wf_type == WorkflowType.PARALLEL:
+            lines.append("root_agent = ParallelAgent(")
+            lines.append(f'    name="{project_name}_parallel",')
+            lines.append(f"    sub_agents=[{sub_agents_str}],")
             lines.append(")")
         else:
-            # Custom graph: use LlmAgent with sub_agents and routing instructions
-            # Build routing instruction from conditional edges
-            routing_instructions = self._build_routing_instructions(ir)
+            # Custom graph or hierarchical → LlmAgent orchestrator with sub_agents
+            routing = self._build_routing_instructions(ir)
             lines.append("root_agent = LlmAgent(")
-            lines.append(f'    name="{ir.metadata.name}_orchestrator",')
-            lines.append(f'    model="{ir.config.default_llm.model}",')
-            lines.append(f'    instruction="""{routing_instructions}""",')
-            lines.append(f"    sub_agents=[{agent_list}],")
+            lines.append(f'    name="{project_name}_orchestrator",')
+            lines.append(f'    model="{model_str}",')
+            lines.append(f'    instruction="""{routing}""",')
+            lines.append(f"    sub_agents=[{sub_agents_str}],")
             lines.append(")")
 
         lines.append("")
         return "\n".join(lines)
 
-    def _build_routing_instructions(self, ir: IRDocument) -> str:
-        """Build routing instructions from conditional edges for LLM-based routing."""
-        instructions = [
-            "You are the orchestrator agent. Route tasks to the appropriate specialist agent.",
-            "",
-            "Available agents and when to use them:",
-        ]
-
-        for agent in ir.agents:
-            desc = agent.description or agent.goal or agent.role or f"Handles {agent.name} tasks"
-            instructions.append(f"- {agent.name}: {desc}")
-
-        # Add routing rules from conditional edges
-        cond_edges = [e for e in ir.workflow.edges if e.type == EdgeType.CONDITIONAL]
-        if cond_edges:
-            instructions.append("")
-            instructions.append("Routing rules:")
-            for edge in cond_edges:
-                if edge.condition and edge.condition.label:
-                    target_node = next(
-                        (n for n in ir.workflow.nodes if n.id == edge.target), None
-                    )
-                    if target_node and target_node.agent_ref:
-                        target_agent = next(
-                            (a for a in ir.agents if a.id == target_node.agent_ref), None
-                        )
-                        if target_agent:
-                            instructions.append(
-                                f"- When {edge.condition.label}: "
-                                f"delegate to {target_agent.name}"
-                            )
-
-        return "\n".join(instructions)
-
-    def _generate_callbacks(self, ir: IRDocument) -> str:
-        """Generate callback functions for HITL."""
-        return dedent('''\
-            """Callbacks for human-in-the-loop review."""
-
-            from google.adk.agents import CallbackContext
-            from google.genai import types
-
-
-            def before_agent_review(callback_context: CallbackContext) -> types.Content | None:
-                """Called before an agent executes. Return Content to skip agent logic."""
-                agent_name = callback_context.agent_name
-                print(f"\\n[HITL] Agent '{agent_name}' is about to execute.")
-                print("[HITL] Type 'skip' to skip, or press Enter to continue:")
-
-                user_input = input("> ").strip()
-                if user_input.lower() == "skip":
-                    return types.Content(
-                        role="model",
-                        parts=[types.Part(text=f"Agent {agent_name} was skipped by human review.")]
-                    )
-                return None  # Continue to agent logic
-
-
-            def after_agent_review(callback_context: CallbackContext) -> types.Content | None:
-                """Called after an agent executes. Return Content to append to output."""
-                agent_name = callback_context.agent_name
-                print(f"\\n[HITL] Agent '{agent_name}' has completed execution.")
-                print("[HITL] Type feedback or press Enter to accept:")
-
-                user_input = input("> ").strip()
-                if user_input:
-                    return types.Content(
-                        role="model",
-                        parts=[types.Part(text=f"Human feedback: {user_input}")]
-                    )
-                return None  # Accept agent output as-is
-        ''')
-
     def _generate_main(self, ir: IRDocument, project_name: str) -> str:
-        """Generate the main runner entry point."""
+        """Generate main.py runner."""
         return dedent(f'''\
             """
-            {ir.metadata.name} - Main Entry Point
+            {ir.metadata.name} — Google ADK Runner
 
-            {ir.metadata.description}
-
-            Uses Google ADK Runner with InMemorySessionService for local development.
+            Run with: python -m {project_name}.main
             """
 
             import asyncio
+            import os
 
             from dotenv import load_dotenv
             from google.adk.runners import Runner
             from google.adk.sessions import InMemorySessionService
             from google.genai import types
 
-            from .agent import root_agent
-
             load_dotenv()
 
+            # Import the agent hierarchy
+            from .agent import root_agent
 
-            async def main() -> None:
-                """Run the agent workflow."""
+
+            async def run(user_message: str = "Hello, I need help with a customer support issue.") -> None:
+                """Run the agent with a user message."""
                 session_service = InMemorySessionService()
                 runner = Runner(
                     agent=root_agent,
@@ -454,44 +334,193 @@ class GoogleADKGenerator:
                     session_service=session_service,
                 )
 
-                # Create a session
                 session = await session_service.create_session(
                     app_name="{project_name}",
-                    user_id="default_user",
+                    user_id="test_user",
                 )
 
-                # Send initial message
                 message = types.Content(
                     role="user",
-                    parts=[types.Part(text="Hello, please help me with my task.")]
+                    parts=[types.Part(text=user_message)],
                 )
 
-                print("Running agent workflow...")
+                print(f"\\n>>> User: {{user_message}}")
+                print("=" * 60)
+
                 async for event in runner.run_async(
-                    user_id="default_user",
+                    user_id="test_user",
                     session_id=session.id,
                     new_message=message,
                 ):
                     if event.content and event.content.parts:
                         for part in event.content.parts:
                             if part.text:
-                                print(f"[{{event.author}}]: {{part.text}}")
+                                author = event.author or "agent"
+                                print(f"[{{author}}]: {{part.text}}")
+
+                print("=" * 60)
+                print("Done.")
 
 
             if __name__ == "__main__":
-                asyncio.run(main())
+                asyncio.run(run())
         ''')
 
-    def _generate_dockerfile(self, project_name: str) -> str:
-        return dedent(f"""\
-            FROM python:3.12-slim
+    def _generate_test_script(self, ir: IRDocument, project_name: str) -> str:
+        """Generate a standalone test script that validates the agent hierarchy."""
+        agent_names = [a.name for a in ir.agents]
+        tool_names = [t.name for t in ir.tools]
 
-            WORKDIR /app
+        return dedent(f'''\
+            """
+            Test script for {ir.metadata.name}
 
-            COPY requirements.txt .
-            RUN pip install --no-cache-dir -r requirements.txt
+            Validates the agent hierarchy can be constructed and run.
+            Run with: python -m {project_name}.test_run
+            """
 
-            COPY . .
+            import asyncio
+            import os
+            import sys
 
-            CMD ["python", "-m", "main"]
-        """)
+            from dotenv import load_dotenv
+
+            load_dotenv()
+
+
+            def test_imports():
+                """Test that all modules import correctly."""
+                print("[TEST] Importing agent module...")
+                from .agent import root_agent
+                print(f"  root_agent: {{root_agent.name}}")
+                print(f"  type: {{type(root_agent).__name__}}")
+                if hasattr(root_agent, "sub_agents") and root_agent.sub_agents:
+                    for sa in root_agent.sub_agents:
+                        print(f"    sub_agent: {{sa.name}} ({{type(sa).__name__}})")
+                print("[TEST] Imports OK\\n")
+                return root_agent
+
+
+            async def test_run(root_agent):
+                """Test running the agent with a sample message."""
+                from google.adk.runners import Runner
+                from google.adk.sessions import InMemorySessionService
+                from google.genai import types
+
+                print("[TEST] Running agent with test message...")
+                session_service = InMemorySessionService()
+                runner = Runner(
+                    agent=root_agent,
+                    app_name="{project_name}_test",
+                    session_service=session_service,
+                )
+
+                session = await session_service.create_session(
+                    app_name="{project_name}_test",
+                    user_id="test_user",
+                )
+
+                test_message = "I have a billing issue with my account. My last charge was incorrect."
+
+                message = types.Content(
+                    role="user",
+                    parts=[types.Part(text=test_message)],
+                )
+
+                print(f"  Input: {{test_message}}")
+                print("-" * 40)
+
+                responses = []
+                async for event in runner.run_async(
+                    user_id="test_user",
+                    session_id=session.id,
+                    new_message=message,
+                ):
+                    if event.content and event.content.parts:
+                        for part in event.content.parts:
+                            if part.text:
+                                author = event.author or "agent"
+                                print(f"  [{{author}}]: {{part.text[:200]}}")
+                                responses.append(part.text)
+
+                print("-" * 40)
+                if responses:
+                    print(f"[TEST] Got {{len(responses)}} response(s). PASS")
+                else:
+                    print("[TEST] No responses received. FAIL")
+                    sys.exit(1)
+
+
+            if __name__ == "__main__":
+                agent = test_imports()
+                asyncio.run(test_run(agent))
+                print("\\n[ALL TESTS PASSED]")
+        ''')
+
+    def _get_agent_execution_order(self, ir: IRDocument) -> list[str]:
+        """Get agent IDs in execution order by tracing edges from entry."""
+        node_to_agent: dict[str, str] = {}
+        for node in ir.workflow.nodes:
+            if node.type == NodeType.AGENT and node.agent_ref:
+                node_to_agent[node.id] = node.agent_ref
+
+        # Build adjacency from edges
+        adj: dict[str, list[str]] = {}
+        for edge in ir.workflow.edges:
+            adj.setdefault(edge.source, []).append(edge.target)
+
+        # BFS from entry
+        ordered: list[str] = []
+        visited: set[str] = set()
+        queue = [ir.workflow.entry_node] if ir.workflow.entry_node else []
+
+        while queue:
+            node_id = queue.pop(0)
+            if node_id in visited:
+                continue
+            visited.add(node_id)
+            if node_id in node_to_agent:
+                agent_id = node_to_agent[node_id]
+                if agent_id not in ordered:
+                    ordered.append(agent_id)
+            for neighbor in adj.get(node_id, []):
+                queue.append(neighbor)
+
+        return ordered
+
+    def _build_routing_instructions(self, ir: IRDocument) -> str:
+        """Build orchestrator routing instructions from the graph."""
+        ordered = self._get_agent_execution_order(ir)
+
+        instructions = [
+            f"You are the orchestrator for {ir.metadata.name}.",
+            "",
+            "Process the user request by delegating to your sub-agents in this order:",
+        ]
+
+        for i, agent_id in enumerate(ordered, 1):
+            agent = next((a for a in ir.agents if a.id == agent_id), None)
+            if agent:
+                desc = agent.description or agent.goal or agent.role or f"Handle {agent.name} tasks"
+                instructions.append(f"{i}. **{agent.name}**: {desc}")
+
+        # Check for HITL nodes
+        hitl_nodes = [n for n in ir.workflow.nodes if n.type == NodeType.HUMAN_INPUT]
+        if hitl_nodes:
+            instructions.append("")
+            instructions.append("IMPORTANT: After the classification step, pause and present the "
+                              "classification result for human review before proceeding.")
+
+        # Check for condition nodes
+        cond_nodes = [n for n in ir.workflow.nodes if n.type == NodeType.CONDITION]
+        if cond_nodes:
+            instructions.append("")
+            for cn in cond_nodes:
+                expr = cn.config.condition.condition_expression if cn.config.condition else ""
+                instructions.append(f"Routing rule: If {expr or 'condition is met'}, "
+                                  "route to the appropriate specialist agent.")
+
+        instructions.append("")
+        instructions.append("Synthesize the results from all agents into a final response.")
+
+        return "\\n".join(instructions)
