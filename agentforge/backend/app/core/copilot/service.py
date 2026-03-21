@@ -93,38 +93,30 @@ class CopilotService:
         history.append({"role": "user", "content": user_msg})
 
         try:
-            # Call Claude with tools
-            response = self.client.messages.create(
-                model="claude-sonnet-4-20250514",
-                max_tokens=4096,
-                system=COPILOT_SYSTEM_PROMPT,
-                tools=COPILOT_TOOLS,
-                messages=history,
-            )
+            text_parts: list[str] = []
+            patches: list[IRPatch] = []
+            max_rounds = 8  # Safety limit for tool-use loops
 
-            # Process response
-            text_parts = []
-            patches = []
+            for round_num in range(max_rounds):
+                response = self.client.messages.create(
+                    model="claude-sonnet-4-20250514",
+                    max_tokens=4096,
+                    system=COPILOT_SYSTEM_PROMPT,
+                    tools=COPILOT_TOOLS,
+                    messages=history,
+                )
 
-            for block in response.content:
-                if block.type == "text":
-                    text_parts.append(block.text)
-                elif block.type == "tool_use":
-                    patch = self._process_tool_call(
-                        block.name, block.input, ir_document
-                    )
-                    if patch:
-                        patches.append(patch)
-
-            # Handle tool use loop — Claude may need to see tool results
-            if response.stop_reason == "tool_use":
-                # Build tool results
+                # Collect text and tool calls from this round
                 tool_results = []
                 for block in response.content:
-                    if block.type == "tool_use":
+                    if block.type == "text":
+                        text_parts.append(block.text)
+                    elif block.type == "tool_use":
                         patch = self._process_tool_call(
                             block.name, block.input, ir_document
                         )
+                        if patch:
+                            patches.append(patch)
                         result_text = (
                             f"Successfully executed {block.name}: {patch.description}"
                             if patch
@@ -136,34 +128,15 @@ class CopilotService:
                             "content": result_text,
                         })
 
-                # Add assistant message and tool results to history
+                # Add assistant response to history
                 history.append({"role": "assistant", "content": response.content})
+
+                # If Claude is done (no more tool calls), break
+                if response.stop_reason != "tool_use":
+                    break
+
+                # Otherwise, feed tool results back and loop
                 history.append({"role": "user", "content": tool_results})
-
-                # Get follow-up response
-                follow_up = self.client.messages.create(
-                    model="claude-sonnet-4-20250514",
-                    max_tokens=4096,
-                    system=COPILOT_SYSTEM_PROMPT,
-                    tools=COPILOT_TOOLS,
-                    messages=history,
-                )
-
-                for block in follow_up.content:
-                    if block.type == "text":
-                        text_parts.append(block.text)
-                    elif block.type == "tool_use":
-                        patch = self._process_tool_call(
-                            block.name, block.input, ir_document
-                        )
-                        if patch:
-                            patches.append(patch)
-
-                # Add follow-up to history
-                history.append({"role": "assistant", "content": follow_up.content})
-            else:
-                # Add response to history
-                history.append({"role": "assistant", "content": response.content})
 
             # Trim history to avoid context overflow (keep last 20 turns)
             if len(history) > 40:
@@ -178,6 +151,11 @@ class CopilotService:
             return CopilotResponse(
                 text="",
                 error=f"Claude API error: {e}",
+            )
+        except Exception as e:
+            return CopilotResponse(
+                text="",
+                error=f"Copilot error: {e}",
             )
 
     def _process_tool_call(

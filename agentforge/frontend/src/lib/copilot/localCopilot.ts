@@ -195,13 +195,12 @@ export function processLocally(
   const nodeCount = ir.workflow.nodes.length;
 
   return {
-    text: `I understand you want to: "${userMessage}"\n\n` +
-      `Your workflow currently has **${agentCount} agent(s)** and **${nodeCount} node(s)**.\n\n` +
-      "Try specific commands like:\n" +
+    text: `Your workflow currently has **${agentCount} agent(s)** and **${nodeCount} node(s)**.\n\n` +
+      "Try commands like:\n" +
       '- **"Add an agent called Classifier"**\n' +
       '- **"Build me a 3-agent pipeline"**\n' +
-      '- **"Add a human review"**\n\n' +
-      "For full natural language understanding, set `ANTHROPIC_API_KEY` in your `.env` file.",
+      '- **"Add a human review"**\n' +
+      '- **"Connect Classifier to Router"**',
     actionsApplied: [],
   };
 }

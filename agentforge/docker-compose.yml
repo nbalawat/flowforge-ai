@@ -34,10 +34,11 @@ services:
       dockerfile: ../infra/docker/backend.Dockerfile
     ports:
       - "8010:8000"
+    env_file:
+      - .env
     environment:
       DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/agentforge
       REDIS_URL: redis://redis:6379/0
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
     depends_on:
       postgres:
         condition: service_healthy
