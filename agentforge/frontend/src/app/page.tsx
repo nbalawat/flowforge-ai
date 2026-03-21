@@ -7,6 +7,7 @@ import { PropertiesPanel } from "@/components/panels/PropertiesPanel";
 import { CopilotChat } from "@/components/copilot/CopilotChat";
 import { TestRunner } from "@/components/generation/TestRunner";
 import { HeaderActions } from "@/components/common/HeaderActions";
+import { CommandPalette } from "@/components/common/CommandPalette";
 import { useCanvasStore } from "@/lib/store/canvasStore";
 
 export default function Home() {
@@ -116,6 +117,9 @@ export default function Home() {
 
       {/* Test Runner & Code Generation */}
       <TestRunner />
+
+      {/* Command Palette (Cmd+K) */}
+      <CommandPalette />
     </div>
   );
 }

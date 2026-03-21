@@ -246,15 +246,63 @@ export function TestRunner() {
                       </span>
                     </div>
 
-                    {/* Stdout */}
+                    {/* Execution Trace */}
                     {result.stdout && (
                       <div className="mb-4">
-                        <div className="text-xs text-[var(--text-secondary)] mb-1 uppercase font-semibold">
-                          Output
+                        <div className="text-xs text-[var(--text-secondary)] mb-2 uppercase font-semibold">
+                          Execution Trace
                         </div>
-                        <pre className="bg-[var(--bg-primary)] rounded-lg p-4 text-xs font-mono text-emerald-300 whitespace-pre-wrap overflow-auto max-h-[50vh]">
-                          {result.stdout}
-                        </pre>
+                        <div className="space-y-2">
+                          {parseExecutionTrace(result.stdout).map((step, i) => (
+                            <div
+                              key={i}
+                              className={`rounded-lg border p-3 ${
+                                step.type === "system"
+                                  ? "border-[var(--border-color)] bg-[var(--bg-primary)]"
+                                  : step.type === "agent"
+                                  ? "border-blue-800 bg-blue-950/30"
+                                  : step.type === "pass"
+                                  ? "border-emerald-800 bg-emerald-950/30"
+                                  : "border-[var(--border-color)] bg-[var(--bg-primary)]"
+                              }`}
+                            >
+                              <div className="flex items-center gap-2 mb-1">
+                                <span
+                                  className={`w-5 h-5 rounded flex items-center justify-center text-[10px] font-bold ${
+                                    step.type === "agent"
+                                      ? "bg-blue-600"
+                                      : step.type === "pass"
+                                      ? "bg-emerald-600"
+                                      : "bg-[#3a3a6a]"
+                                  }`}
+                                >
+                                  {step.type === "agent" ? "A" : step.type === "pass" ? "+" : "#"}
+                                </span>
+                                <span className="text-xs font-semibold text-white">
+                                  {step.label}
+                                </span>
+                                {step.type === "agent" && (
+                                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-600/20 text-blue-400">
+                                    Agent Response
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-xs text-[var(--text-secondary)] ml-7 whitespace-pre-wrap">
+                                {step.content}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+
+                        {/* Raw output toggle */}
+                        <details className="mt-3">
+                          <summary className="text-[10px] text-[var(--text-secondary)] cursor-pointer hover:text-white">
+                            Show raw output
+                          </summary>
+                          <pre className="mt-1 bg-[var(--bg-primary)] rounded p-3 text-[10px] font-mono text-[var(--text-secondary)] whitespace-pre-wrap overflow-auto max-h-40">
+                            {result.stdout}
+                          </pre>
+                        </details>
                       </div>
                     )}
 
@@ -346,4 +394,126 @@ export function TestRunner() {
       </div>
     </div>
   );
+}
+
+// ============================================================================
+// Execution trace parser
+// ============================================================================
+
+interface TraceStep {
+  type: "system" | "agent" | "pass" | "info";
+  label: string;
+  content: string;
+}
+
+function parseExecutionTrace(stdout: string): TraceStep[] {
+  const steps: TraceStep[] = [];
+  const lines = stdout.split("\n");
+
+  let i = 0;
+  while (i < lines.length) {
+    const line = lines[i].trim();
+
+    // [TEST] lines → system steps
+    if (line.startsWith("[TEST]")) {
+      const msg = line.replace("[TEST]", "").trim();
+      if (msg.includes("PASS")) {
+        steps.push({ type: "pass", label: "Test Passed", content: msg });
+      } else {
+        steps.push({ type: "system", label: "System", content: msg });
+      }
+      i++;
+      continue;
+    }
+
+    // [ALL TESTS PASSED]
+    if (line.includes("[ALL TESTS PASSED]")) {
+      steps.push({ type: "pass", label: "All Tests Passed", content: "Workflow executed successfully" });
+      i++;
+      continue;
+    }
+
+    // [agent_name]: response → agent response
+    const agentMatch = line.match(/^\s*\[(.+?)\]:\s*(.*)$/);
+    if (agentMatch) {
+      const agentName = agentMatch[1];
+      let content = agentMatch[2];
+
+      // Collect multi-line agent responses
+      i++;
+      while (i < lines.length) {
+        const nextLine = lines[i];
+        if (
+          nextLine.trim().startsWith("[") ||
+          nextLine.trim().startsWith("---") ||
+          nextLine.trim() === ""
+        ) {
+          break;
+        }
+        content += "\n" + nextLine;
+        i++;
+      }
+
+      steps.push({
+        type: "agent",
+        label: agentName,
+        content: content.trim(),
+      });
+      continue;
+    }
+
+    // sub_agent: lines from import test
+    const subAgentMatch = line.match(/^\s*sub_agent:\s*(.+)$/);
+    if (subAgentMatch) {
+      steps.push({
+        type: "info",
+        label: "Agent Hierarchy",
+        content: subAgentMatch[1],
+      });
+      i++;
+      continue;
+    }
+
+    // root_agent lines
+    const rootMatch = line.match(/^\s*root_agent:\s*(.+)$/);
+    if (rootMatch) {
+      steps.push({
+        type: "system",
+        label: "Root Agent",
+        content: rootMatch[1],
+      });
+      i++;
+      continue;
+    }
+
+    // Input line
+    const inputMatch = line.match(/^\s*Input:\s*(.+)$/);
+    if (inputMatch) {
+      steps.push({
+        type: "system",
+        label: "Test Input",
+        content: inputMatch[1],
+      });
+      i++;
+      continue;
+    }
+
+    // Skip separator lines and empty lines
+    if (line === "" || line.match(/^-+$/) || line.match(/^=+$/)) {
+      i++;
+      continue;
+    }
+
+    // type: line
+    const typeMatch = line.match(/^\s*type:\s*(.+)$/);
+    if (typeMatch) {
+      steps.push({ type: "info", label: "Type", content: typeMatch[1] });
+      i++;
+      continue;
+    }
+
+    i++;
+  }
+
+  return steps;
 }

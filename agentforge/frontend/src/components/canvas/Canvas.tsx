@@ -166,25 +166,41 @@ function CanvasInner() {
   const edges: Edge[] = useMemo(() => {
     if (!irDocument) return [];
 
-    return irDocument.workflow.edges.map((edge) => ({
-      id: edge.id,
-      source: edge.source,
-      target: edge.target,
-      type: edge.type === "conditional" ? "smoothstep" : "default",
-      label: edge.condition?.label || undefined,
-      animated: edge.type === "conditional",
-      style: {
-        stroke:
-          edge.type === "conditional"
-            ? "#f59e0b"
-            : edge.type === "error"
-            ? "#ef4444"
-            : "#6366f1",
-        strokeWidth: 2,
-      },
-      labelStyle: { fill: "#ddd", fontSize: 11 },
-      labelBgStyle: { fill: "#1a1a2e", fillOpacity: 0.8 },
-    }));
+    return irDocument.workflow.edges.map((edge) => {
+      // Color coding by edge type
+      const edgeColors: Record<string, { stroke: string; label: string }> = {
+        default: { stroke: "#6366f1", label: "" },
+        conditional: { stroke: "#f59e0b", label: edge.condition?.label || "if" },
+        error: { stroke: "#ef4444", label: "error" },
+        timeout: { stroke: "#f97316", label: "timeout" },
+      };
+      const colors = edgeColors[edge.type] || edgeColors.default;
+
+      return {
+        id: edge.id,
+        source: edge.source,
+        target: edge.target,
+        type: edge.type === "conditional" ? "smoothstep" : "default",
+        label: colors.label || undefined,
+        animated: edge.type === "conditional" || edge.type === "error",
+        style: {
+          stroke: colors.stroke,
+          strokeWidth: edge.type === "conditional" ? 2.5 : 2,
+          strokeDasharray: edge.type === "error" ? "5 3" : undefined,
+        },
+        labelStyle: {
+          fill: colors.stroke,
+          fontSize: 10,
+          fontWeight: 600,
+        },
+        labelBgStyle: {
+          fill: "#0f0f1a",
+          fillOpacity: 0.9,
+        },
+        labelBgPadding: [6, 3] as [number, number],
+        labelBgBorderRadius: 4,
+      };
+    });
   }, [irDocument]);
 
   const onNodesChange: OnNodesChange = useCallback(

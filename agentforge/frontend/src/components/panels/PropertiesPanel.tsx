@@ -2,6 +2,7 @@
 
 import { useCanvasStore } from "@/lib/store/canvasStore";
 import { StateSchemaEditor } from "./StateSchemaEditor";
+import { PromptPlayground } from "./PromptPlayground";
 
 export function PropertiesPanel() {
   const { irDocument, selectedNodeId, selectedEdgeId, updateAgent, updateNode } =
@@ -97,6 +98,15 @@ export function PropertiesPanel() {
               );
             })}
           </div>
+
+          {/* Prompt Playground */}
+          <PromptPlayground
+            agentName={agent.name}
+            systemPrompt={agent.instructions || agent.role || ""}
+            onPromptChange={(newPrompt) =>
+              updateAgent(agent.id, { instructions: newPrompt })
+            }
+          />
         </div>
       </div>
     );
