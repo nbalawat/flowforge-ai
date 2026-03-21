@@ -1,23 +1,23 @@
 "use client";
 
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useEffect } from "react";
 import ReactFlow, {
   Background,
   Controls,
   MiniMap,
+  ReactFlowProvider,
+  useReactFlow,
   type Node,
   type Edge,
   type OnNodesChange,
   type OnEdgesChange,
   type OnConnect,
-  applyNodeChanges,
-  applyEdgeChanges,
-  addEdge,
   BackgroundVariant,
 } from "reactflow";
 import "reactflow/dist/style.css";
 
 import { useCanvasStore } from "@/lib/store/canvasStore";
+import { computeAutoLayout } from "@/lib/layout/autoLayout";
 import { AgentNode } from "./nodes/AgentNode";
 import { ToolNode } from "./nodes/ToolNode";
 import { ConditionNode } from "./nodes/ConditionNode";
@@ -40,9 +40,51 @@ const nodeTypes = {
   subworkflow: SubworkflowNode,
 };
 
-export function Canvas() {
-  const { irDocument, selectNode, selectEdge, updateNode, addEdge: addIREdge } =
+function CanvasInner() {
+  const { irDocument, selectNode, selectEdge, updateNode, addEdge: addIREdge, pushUndo } =
     useCanvasStore();
+  const reactFlow = useReactFlow();
+
+  // Expose auto-layout and fitView via custom events
+  useEffect(() => {
+    const handleAutoLayout = () => {
+      if (!irDocument) return;
+      pushUndo();
+
+      const { positions } = computeAutoLayout(
+        irDocument.workflow.nodes,
+        irDocument.workflow.edges,
+        irDocument.workflow.entry_node || undefined,
+        irDocument.workflow.exit_nodes
+      );
+
+      // Apply positions
+      const store = useCanvasStore.getState();
+      const updatedNodes = irDocument.workflow.nodes.map((node) => {
+        const pos = positions.get(node.id);
+        return pos ? { ...node, position: pos } : node;
+      });
+
+      store.setIRDocument({
+        ...irDocument,
+        workflow: { ...irDocument.workflow, nodes: updatedNodes },
+      });
+
+      // Fit view after layout
+      setTimeout(() => reactFlow.fitView({ padding: 0.2, duration: 300 }), 50);
+    };
+
+    const handleFitView = () => {
+      reactFlow.fitView({ padding: 0.2, duration: 300 });
+    };
+
+    window.addEventListener("agentforge:auto-layout", handleAutoLayout);
+    window.addEventListener("agentforge:fit-view", handleFitView);
+    return () => {
+      window.removeEventListener("agentforge:auto-layout", handleAutoLayout);
+      window.removeEventListener("agentforge:fit-view", handleFitView);
+    };
+  }, [irDocument, reactFlow, pushUndo]);
 
   // Convert IR nodes to React Flow nodes
   const nodes: Node[] = useMemo(() => {
@@ -138,13 +180,15 @@ export function Canvas() {
             : edge.type === "error"
             ? "#ef4444"
             : "#6366f1",
+        strokeWidth: 2,
       },
+      labelStyle: { fill: "#ddd", fontSize: 11 },
+      labelBgStyle: { fill: "#1a1a2e", fillOpacity: 0.8 },
     }));
   }, [irDocument]);
 
   const onNodesChange: OnNodesChange = useCallback(
     (changes) => {
-      // Update positions in the IR when nodes are dragged
       for (const change of changes) {
         if (change.type === "position" && change.position) {
           updateNode(change.id, { position: change.position });
@@ -154,9 +198,7 @@ export function Canvas() {
     [updateNode]
   );
 
-  const onEdgesChange: OnEdgesChange = useCallback((changes) => {
-    // Handle edge removals etc.
-  }, []);
+  const onEdgesChange: OnEdgesChange = useCallback(() => {}, []);
 
   const onConnect: OnConnect = useCallback(
     (connection) => {
@@ -172,16 +214,12 @@ export function Canvas() {
   );
 
   const onNodeClick = useCallback(
-    (_: React.MouseEvent, node: Node) => {
-      selectNode(node.id);
-    },
+    (_: React.MouseEvent, node: Node) => selectNode(node.id),
     [selectNode]
   );
 
   const onEdgeClick = useCallback(
-    (_: React.MouseEvent, edge: Edge) => {
-      selectEdge(edge.id);
-    },
+    (_: React.MouseEvent, edge: Edge) => selectEdge(edge.id),
     [selectEdge]
   );
 
@@ -242,5 +280,14 @@ export function Canvas() {
         }}
       />
     </ReactFlow>
+  );
+}
+
+// Wrap with ReactFlowProvider so useReactFlow() works
+export function Canvas() {
+  return (
+    <ReactFlowProvider>
+      <CanvasInner />
+    </ReactFlowProvider>
   );
 }

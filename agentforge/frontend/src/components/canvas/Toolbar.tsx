@@ -61,13 +61,18 @@ export function Toolbar() {
     const ir = store.irDocument;
     if (!ir) return;
 
-    const maxY = Math.max(
-      ...ir.workflow.nodes.map((n) => n.position.y),
-      50
-    );
+    // Place new nodes near the centroid of existing nodes, offset slightly right and down
+    const existingNodes = ir.workflow.nodes;
+    const avgX = existingNodes.length > 0
+      ? existingNodes.reduce((sum, n) => sum + n.position.x, 0) / existingNodes.length
+      : 300;
+    const avgY = existingNodes.length > 0
+      ? existingNodes.reduce((sum, n) => sum + n.position.y, 0) / existingNodes.length
+      : 200;
+
     const position = {
-      x: 200 + Math.random() * 150,
-      y: maxY + 100 + Math.random() * 40,
+      x: avgX + 30 + Math.random() * 60 - 30,
+      y: avgY + 30 + Math.random() * 60 - 30,
     };
 
     switch (type) {
@@ -188,6 +193,56 @@ export function Toolbar() {
           </div>
         </div>
       ))}
+
+      {/* Divider */}
+      <div className="w-8 h-px bg-[var(--border-color)] my-2" />
+
+      {/* Layout actions */}
+      <div className="text-[9px] text-[var(--text-secondary)] uppercase tracking-wider mb-1 font-semibold">
+        Layout
+      </div>
+
+      <div className="relative group">
+        <button
+          onClick={() => window.dispatchEvent(new CustomEvent("agentforge:auto-layout"))}
+          className="w-12 h-12 rounded-lg border border-[var(--border-color)] hover:border-[var(--accent)] flex flex-col items-center justify-center transition-colors gap-0.5"
+          title="Auto-organize nodes based on connections"
+        >
+          <svg className="w-5 h-5 text-[var(--text-secondary)]" viewBox="0 0 20 20" fill="currentColor">
+            <path fillRule="evenodd" d="M3 4a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H4a1 1 0 01-1-1V4zm2 1v2h2V5H5zM3 12a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H4a1 1 0 01-1-1v-4zm2 1v2h2v-2H5zM11 4a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1V4zm2 1v2h2V5h-2zM11 12a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4zm2 1v2h2v-2h-2z" clipRule="evenodd" />
+          </svg>
+          <span className="text-[8px] text-[var(--text-secondary)] leading-tight">
+            Auto
+          </span>
+        </button>
+        <div className="absolute left-full top-1/2 -translate-y-1/2 ml-2 px-3 py-2 bg-[#222244] border border-[var(--border-color)] rounded-lg shadow-xl opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-50 whitespace-nowrap">
+          <div className="text-xs font-semibold text-white">Auto Layout</div>
+          <div className="text-[10px] text-[var(--text-secondary)] mt-0.5">
+            Organize nodes top-to-bottom based on connections
+          </div>
+        </div>
+      </div>
+
+      <div className="relative group">
+        <button
+          onClick={() => window.dispatchEvent(new CustomEvent("agentforge:fit-view"))}
+          className="w-12 h-12 rounded-lg border border-[var(--border-color)] hover:border-[var(--accent)] flex flex-col items-center justify-center transition-colors gap-0.5"
+          title="Fit all nodes in view"
+        >
+          <svg className="w-5 h-5 text-[var(--text-secondary)]" viewBox="0 0 20 20" fill="currentColor">
+            <path d="M3 4a1 1 0 011-1h3a1 1 0 010 2H5v2a1 1 0 01-2 0V4zM13 3a1 1 0 011-1h3a1 1 0 011 1v3a1 1 0 01-2 0V5h-2a1 1 0 010-2zM4 13a1 1 0 011-1h0a1 1 0 011 1v2h2a1 1 0 010 2H4a1 1 0 01-1-1v-3zM14 17a1 1 0 01-1-1v0a1 1 0 012 0v0h1a1 1 0 011 1v0a1 1 0 01-1 1h-2z" />
+          </svg>
+          <span className="text-[8px] text-[var(--text-secondary)] leading-tight">
+            Fit
+          </span>
+        </button>
+        <div className="absolute left-full top-1/2 -translate-y-1/2 ml-2 px-3 py-2 bg-[#222244] border border-[var(--border-color)] rounded-lg shadow-xl opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-50 whitespace-nowrap">
+          <div className="text-xs font-semibold text-white">Fit View</div>
+          <div className="text-[10px] text-[var(--text-secondary)] mt-0.5">
+            Zoom to fit all nodes in the viewport
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

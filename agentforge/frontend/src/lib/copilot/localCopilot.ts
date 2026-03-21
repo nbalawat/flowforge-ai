@@ -129,10 +129,10 @@ export function processLocally(
       actions.push(`Connected ${agentNames[agentNames.length - 1]} → End`);
     }
 
-    // Reposition exit node
-    if (exitNode) {
-      store.updateNode(exitNode.id, { position: { x: 250, y: 150 + count * 130 + 50 } });
-    }
+    // Auto-layout and fit view after building
+    setTimeout(() => {
+      window.dispatchEvent(new CustomEvent("agentforge:auto-layout"));
+    }, 100);
 
     return {
       text: `I've built a **${count}-agent pipeline** with: ${agentNames.join(", ")}. They're connected sequentially from Start to End.\n\nClick on each agent to customize its role, instructions, and tools.`,
