@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useEffect } from "react";
+import { useCallback, useMemo, useEffect, useState } from "react";
 import ReactFlow, {
   Background,
   Controls,
@@ -26,6 +26,7 @@ import { EntryExitNode } from "./nodes/EntryExitNode";
 import { LoopNode } from "./nodes/LoopNode";
 import { ParallelNode } from "./nodes/ParallelNode";
 import { SubworkflowNode } from "./nodes/SubworkflowNode";
+import { ContextMenu } from "./ContextMenu";
 
 const nodeTypes = {
   agent: AgentNode,
@@ -41,9 +42,17 @@ const nodeTypes = {
 };
 
 function CanvasInner() {
-  const { irDocument, selectNode, selectEdge, updateNode, addEdge: addIREdge, pushUndo } =
+  const { irDocument, selectNode, selectEdge, updateNode, addEdge: addIREdge, pushUndo, setEditingNode } =
     useCanvasStore();
   const reactFlow = useReactFlow();
+
+  // Context menu state
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+    nodeId?: string;
+    edgeId?: string;
+  } | null>(null);
 
   // Expose auto-layout and fitView via custom events
   useEffect(() => {
@@ -101,6 +110,14 @@ function CanvasInner() {
             agentRef: agent.id,
             role: agent.role,
             toolCount: agent.tools.length,
+            modelName: agent.llm_config?.model || irDocument.config.default_llm.model,
+            hasMemory: agent.memory_config.long_term_enabled,
+            canDelegate: agent.delegation.can_delegate,
+            capabilityFlags: {
+              code: agent.capabilities.code_execution,
+              web: agent.capabilities.web_browsing,
+              file: agent.capabilities.file_access,
+            },
           };
         }
       } else if (node.type === "tool_call" && node.tool_ref) {
@@ -110,6 +127,8 @@ function CanvasInner() {
             label: tool.name,
             toolRef: tool.id,
             description: tool.description,
+            paramCount: tool.parameters.length,
+            toolType: tool.type,
           };
         }
       } else if (node.type === "condition") {
@@ -242,60 +261,107 @@ function CanvasInner() {
   const onPaneClick = useCallback(() => {
     selectNode(null);
     selectEdge(null);
+    setContextMenu(null);
   }, [selectNode, selectEdge]);
 
+  const onNodeDoubleClick = useCallback(
+    (_: React.MouseEvent, node: Node) => {
+      setEditingNode(node.id);
+    },
+    [setEditingNode]
+  );
+
+  const onNodeContextMenu = useCallback(
+    (event: React.MouseEvent, node: Node) => {
+      event.preventDefault();
+      setContextMenu({ x: event.clientX, y: event.clientY, nodeId: node.id });
+    },
+    []
+  );
+
+  const onEdgeContextMenu = useCallback(
+    (event: React.MouseEvent, edge: Edge) => {
+      event.preventDefault();
+      setContextMenu({ x: event.clientX, y: event.clientY, edgeId: edge.id });
+    },
+    []
+  );
+
+  const onPaneContextMenu = useCallback(
+    (event: React.MouseEvent) => {
+      event.preventDefault();
+      setContextMenu({ x: event.clientX, y: event.clientY });
+    },
+    []
+  );
+
   return (
-    <ReactFlow
-      nodes={nodes}
-      edges={edges}
-      nodeTypes={nodeTypes}
-      onNodesChange={onNodesChange}
-      onEdgesChange={onEdgesChange}
-      onConnect={onConnect}
-      onNodeClick={onNodeClick}
-      onEdgeClick={onEdgeClick}
-      onPaneClick={onPaneClick}
-      fitView
-      snapToGrid
-      snapGrid={[20, 20]}
-      defaultEdgeOptions={{
-        style: { stroke: "#6366f1", strokeWidth: 2 },
-      }}
-    >
-      <Background variant={BackgroundVariant.Dots} gap={20} size={1} color="#2a2a4a" />
-      <Controls
-        showZoom={true}
-        showFitView={true}
-        showInteractive={true}
-        position="bottom-left"
-      />
-      <MiniMap
-        pannable
-        zoomable
-        nodeStrokeWidth={3}
-        nodeColor={(node) => {
-          switch (node.type) {
-            case "agent": return "#3b82f6";
-            case "tool_call": return "#8b5cf6";
-            case "condition": return "#f59e0b";
-            case "human_input": return "#22c55e";
-            case "entry": return "#10b981";
-            case "exit": return "#f43f5e";
-            case "loop": return "#ec4899";
-            case "parallel_fan_out": return "#06b6d4";
-            case "parallel_fan_in": return "#06b6d4";
-            case "subworkflow": return "#f97316";
-            default: return "#6366f1";
-          }
+    <>
+      <ReactFlow
+        nodes={nodes}
+        edges={edges}
+        nodeTypes={nodeTypes}
+        onNodesChange={onNodesChange}
+        onEdgesChange={onEdgesChange}
+        onConnect={onConnect}
+        onNodeClick={onNodeClick}
+        onEdgeClick={onEdgeClick}
+        onPaneClick={onPaneClick}
+        onNodeDoubleClick={onNodeDoubleClick}
+        onNodeContextMenu={onNodeContextMenu}
+        onEdgeContextMenu={onEdgeContextMenu}
+        onPaneContextMenu={onPaneContextMenu}
+        fitView
+        snapToGrid
+        snapGrid={[20, 20]}
+        defaultEdgeOptions={{
+          style: { stroke: "#6366f1", strokeWidth: 2 },
         }}
-        maskColor="rgba(15, 15, 30, 0.7)"
-        style={{
-          backgroundColor: "#16162a",
-          border: "1px solid #3a3a6a",
-          borderRadius: "8px",
-        }}
-      />
-    </ReactFlow>
+      >
+        <Background variant={BackgroundVariant.Dots} gap={20} size={1} color="#2a2a4a" />
+        <Controls
+          showZoom={true}
+          showFitView={true}
+          showInteractive={true}
+          position="bottom-left"
+        />
+        <MiniMap
+          pannable
+          zoomable
+          nodeStrokeWidth={3}
+          nodeColor={(node) => {
+            switch (node.type) {
+              case "agent": return "#3b82f6";
+              case "tool_call": return "#8b5cf6";
+              case "condition": return "#f59e0b";
+              case "human_input": return "#22c55e";
+              case "entry": return "#10b981";
+              case "exit": return "#f43f5e";
+              case "loop": return "#ec4899";
+              case "parallel_fan_out": return "#06b6d4";
+              case "parallel_fan_in": return "#06b6d4";
+              case "subworkflow": return "#f97316";
+              default: return "#6366f1";
+            }
+          }}
+          maskColor="rgba(15, 15, 30, 0.7)"
+          style={{
+            backgroundColor: "#16162a",
+            border: "1px solid #3a3a6a",
+            borderRadius: "8px",
+          }}
+        />
+      </ReactFlow>
+      {contextMenu && (
+        <ContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          nodeId={contextMenu.nodeId}
+          edgeId={contextMenu.edgeId}
+          onClose={() => setContextMenu(null)}
+        />
+      )}
+    </>
   );
 }
 

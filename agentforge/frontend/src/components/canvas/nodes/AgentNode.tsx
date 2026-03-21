@@ -8,9 +8,35 @@ interface AgentNodeData {
   agentRef?: string;
   role?: string;
   toolCount?: number;
+  modelName?: string;
+  hasMemory?: boolean;
+  canDelegate?: boolean;
+  capabilityFlags?: {
+    code?: boolean;
+    web?: boolean;
+    file?: boolean;
+  };
+}
+
+function truncateModel(model: string): string {
+  // e.g. "claude-sonnet-4-20250514" -> "claude-sonnet"
+  const parts = model.split("-");
+  if (parts.length >= 2) {
+    return parts.slice(0, 2).join("-");
+  }
+  return model.length > 20 ? model.slice(0, 20) : model;
 }
 
 export const AgentNode = memo(({ data, selected }: NodeProps<AgentNodeData>) => {
+  const caps = data.capabilityFlags;
+  const hasCaps = caps && (caps.code || caps.web || caps.file);
+  const showIndicators =
+    data.modelName ||
+    (data.toolCount ?? 0) > 0 ||
+    hasCaps ||
+    data.hasMemory ||
+    data.canDelegate;
+
   return (
     <div
       className={`px-4 py-3 rounded-lg border-2 min-w-[180px] shadow-lg ${
@@ -34,11 +60,43 @@ export const AgentNode = memo(({ data, selected }: NodeProps<AgentNodeData>) => 
         </p>
       )}
 
-      {(data.toolCount ?? 0) > 0 && (
-        <div className="mt-2 flex items-center gap-1">
-          <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#2a2a4a] text-[var(--text-secondary)]">
-            {data.toolCount} tool{data.toolCount !== 1 ? "s" : ""}
-          </span>
+      {showIndicators && (
+        <div className="mt-2 flex flex-wrap items-center gap-1">
+          {data.modelName && (
+            <span className="text-[9px] px-1.5 py-0.5 rounded bg-blue-900/50 text-blue-300 border border-blue-800/50">
+              {truncateModel(data.modelName)}
+            </span>
+          )}
+          {(data.toolCount ?? 0) > 0 && (
+            <span className="text-[9px] px-1.5 py-0.5 rounded bg-[#2a2a4a] text-[var(--text-secondary)]">
+              {data.toolCount} tool{data.toolCount !== 1 ? "s" : ""}
+            </span>
+          )}
+          {caps?.code && (
+            <span className="text-[9px] px-1 py-0.5 rounded bg-emerald-900/40 text-emerald-300" title="Code Execution">
+              {"</>"}
+            </span>
+          )}
+          {caps?.web && (
+            <span className="text-[9px] px-1 py-0.5 rounded bg-sky-900/40 text-sky-300" title="Web Browsing">
+              www
+            </span>
+          )}
+          {caps?.file && (
+            <span className="text-[9px] px-1 py-0.5 rounded bg-amber-900/40 text-amber-300" title="File Access">
+              file
+            </span>
+          )}
+          {data.hasMemory && (
+            <span className="text-[9px] px-1 py-0.5 rounded bg-purple-900/40 text-purple-300" title="Long-term Memory">
+              mem
+            </span>
+          )}
+          {data.canDelegate && (
+            <span className="text-[9px] px-1 py-0.5 rounded bg-orange-900/40 text-orange-300" title="Can Delegate">
+              del
+            </span>
+          )}
         </div>
       )}
 

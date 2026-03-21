@@ -3,10 +3,26 @@
 import { useCanvasStore } from "@/lib/store/canvasStore";
 import { StateSchemaEditor } from "./StateSchemaEditor";
 import { PromptPlayground } from "./PromptPlayground";
+import { EdgePropertiesEditor } from "@/components/editors/EdgePropertiesEditor";
 
 export function PropertiesPanel() {
-  const { irDocument, selectedNodeId, selectedEdgeId, updateAgent, updateNode } =
+  const { irDocument, selectedNodeId, selectedEdgeId, updateAgent, updateNode, updateEdge } =
     useCanvasStore();
+
+  // Edge properties panel
+  if (irDocument && !selectedNodeId && selectedEdgeId) {
+    const edge = irDocument.workflow.edges.find((e) => e.id === selectedEdgeId);
+    if (edge) {
+      return (
+        <div className="w-72 bg-[var(--bg-secondary)] border-l border-[var(--border-color)] p-4 shrink-0 overflow-y-auto">
+          <EdgePropertiesEditor
+            edge={edge}
+            onUpdate={(updates) => updateEdge(edge.id, updates)}
+          />
+        </div>
+      );
+    }
+  }
 
   if (!irDocument || !selectedNodeId) {
     return (

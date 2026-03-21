@@ -8,6 +8,7 @@ import { CopilotChat } from "@/components/copilot/CopilotChat";
 import { TestRunner } from "@/components/generation/TestRunner";
 import { HeaderActions } from "@/components/common/HeaderActions";
 import { CommandPalette } from "@/components/common/CommandPalette";
+import { NodeEditorModal } from "@/components/editors/NodeEditorModal";
 import { useCanvasStore } from "@/lib/store/canvasStore";
 
 export default function Home() {
@@ -120,6 +121,9 @@ export default function Home() {
 
       {/* Command Palette (Cmd+K) */}
       <CommandPalette />
+
+      {/* Node Editor Modal (double-click to open) */}
+      <NodeEditorModal />
     </div>
   );
 }

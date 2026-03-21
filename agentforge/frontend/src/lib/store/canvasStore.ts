@@ -34,6 +34,9 @@ interface CanvasState {
   selectedNodeId: string | null;
   selectedEdgeId: string | null;
 
+  // Editing modal
+  editingNodeId: string | null;
+
   // UI state
   isLoading: boolean;
   isCopilotOpen: boolean;
@@ -86,6 +89,10 @@ interface CanvasState {
   addTool: (tool: Partial<ToolDefinition>) => void;
   updateTool: (toolId: string, updates: Partial<ToolDefinition>) => void;
   removeTool: (toolId: string) => void;
+
+  // Actions: Node editing modal
+  setEditingNode: (nodeId: string | null) => void;
+  duplicateNode: (nodeId: string) => void;
 
   // Actions: Selection
   selectNode: (nodeId: string | null) => void;
@@ -169,6 +176,7 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
   irDocument: null,
   selectedNodeId: null,
   selectedEdgeId: null,
+  editingNodeId: null,
   isLoading: false,
   isCopilotOpen: true,
   selectedFramework: "langgraph",
@@ -657,6 +665,66 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
       irDocument: {
         ...state.irDocument,
         tools: state.irDocument.tools.filter((t) => t.id !== toolId),
+      },
+    });
+  },
+
+  setEditingNode: (nodeId) => set({ editingNodeId: nodeId }),
+
+  duplicateNode: (nodeId) => {
+    const state = get();
+    if (!state.irDocument) return;
+    get().pushUndo();
+
+    const node = state.irDocument.workflow.nodes.find((n) => n.id === nodeId);
+    if (!node) return;
+
+    const newNodeId = `node_${uuidv4().slice(0, 8)}`;
+    const newNode = {
+      ...JSON.parse(JSON.stringify(node)),
+      id: newNodeId,
+      name: `${node.name} (copy)`,
+      position: { x: node.position.x + 40, y: node.position.y + 40 },
+    };
+
+    let newAgents = state.irDocument.agents;
+    let newTools = state.irDocument.tools;
+
+    // If it's an agent node, duplicate the agent too
+    if (node.type === "agent" && node.agent_ref) {
+      const agent = state.irDocument.agents.find((a) => a.id === node.agent_ref);
+      if (agent) {
+        const newAgentId = `agent_${uuidv4().slice(0, 8)}`;
+        newAgents = [
+          ...newAgents,
+          { ...JSON.parse(JSON.stringify(agent)), id: newAgentId, name: `${agent.name} (copy)` },
+        ];
+        newNode.agent_ref = newAgentId;
+      }
+    }
+
+    // If it's a tool node, duplicate the tool too
+    if (node.type === "tool_call" && node.tool_ref) {
+      const tool = state.irDocument.tools.find((t) => t.id === node.tool_ref);
+      if (tool) {
+        const newToolId = `tool_${uuidv4().slice(0, 8)}`;
+        newTools = [
+          ...newTools,
+          { ...JSON.parse(JSON.stringify(tool)), id: newToolId, name: `${tool.name} (copy)` },
+        ];
+        newNode.tool_ref = newToolId;
+      }
+    }
+
+    set({
+      irDocument: {
+        ...state.irDocument,
+        agents: newAgents,
+        tools: newTools,
+        workflow: {
+          ...state.irDocument.workflow,
+          nodes: [...state.irDocument.workflow.nodes, newNode],
+        },
       },
     });
   },

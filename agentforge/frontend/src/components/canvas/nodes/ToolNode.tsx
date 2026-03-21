@@ -7,7 +7,16 @@ interface ToolNodeData {
   label: string;
   toolRef?: string;
   description?: string;
+  paramCount?: number;
+  toolType?: string;
 }
+
+const TYPE_LABELS: Record<string, string> = {
+  function: "fn",
+  api: "API",
+  mcp_server: "MCP",
+  builtin: "built-in",
+};
 
 export const ToolNode = memo(({ data, selected }: NodeProps<ToolNodeData>) => {
   return (
@@ -31,6 +40,21 @@ export const ToolNode = memo(({ data, selected }: NodeProps<ToolNodeData>) => {
         <p className="text-xs text-[var(--text-secondary)] truncate mt-1">
           {data.description}
         </p>
+      )}
+
+      {(data.paramCount !== undefined || data.toolType) && (
+        <div className="mt-2 flex items-center gap-1">
+          {data.toolType && (
+            <span className="text-[9px] px-1.5 py-0.5 rounded bg-purple-900/50 text-purple-300 border border-purple-800/50">
+              {TYPE_LABELS[data.toolType] || data.toolType}
+            </span>
+          )}
+          {data.paramCount !== undefined && data.paramCount > 0 && (
+            <span className="text-[9px] px-1.5 py-0.5 rounded bg-[#2a2a4a] text-[var(--text-secondary)]">
+              {data.paramCount} param{data.paramCount !== 1 ? "s" : ""}
+            </span>
+          )}
+        </div>
       )}
 
       <Handle type="source" position={Position.Bottom} className="!bg-purple-400" />
