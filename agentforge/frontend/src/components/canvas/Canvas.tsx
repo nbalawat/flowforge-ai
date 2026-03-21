@@ -23,6 +23,9 @@ import { ToolNode } from "./nodes/ToolNode";
 import { ConditionNode } from "./nodes/ConditionNode";
 import { HumanInputNode } from "./nodes/HumanInputNode";
 import { EntryExitNode } from "./nodes/EntryExitNode";
+import { LoopNode } from "./nodes/LoopNode";
+import { ParallelNode } from "./nodes/ParallelNode";
+import { SubworkflowNode } from "./nodes/SubworkflowNode";
 
 const nodeTypes = {
   agent: AgentNode,
@@ -31,6 +34,10 @@ const nodeTypes = {
   human_input: HumanInputNode,
   entry: EntryExitNode,
   exit: EntryExitNode,
+  loop: LoopNode,
+  parallel_fan_out: ParallelNode,
+  parallel_fan_in: ParallelNode,
+  subworkflow: SubworkflowNode,
 };
 
 export function Canvas() {
@@ -77,6 +84,29 @@ export function Canvas() {
         data = {
           label: node.name || (node.type === "entry" ? "Start" : "End"),
           nodeType: node.type,
+        };
+      } else if (node.type === "loop") {
+        data = {
+          label: node.name || "Loop",
+          maxIterations: node.config.loop?.max_iterations,
+          exitCondition: node.config.loop?.exit_condition,
+        };
+      } else if (node.type === "parallel_fan_out") {
+        data = {
+          label: node.name || "Parallel",
+          nodeSubtype: "fan_out",
+          fanOutOn: node.config.parallel_fan_out?.fan_out_on,
+        };
+      } else if (node.type === "parallel_fan_in") {
+        data = {
+          label: node.name || "Join",
+          nodeSubtype: "fan_in",
+          strategy: node.config.parallel_fan_in?.aggregation_strategy,
+        };
+      } else if (node.type === "subworkflow") {
+        data = {
+          label: node.name || "Subworkflow",
+          subworkflowRef: node.config.subworkflow?.subworkflow_ref,
         };
       }
 

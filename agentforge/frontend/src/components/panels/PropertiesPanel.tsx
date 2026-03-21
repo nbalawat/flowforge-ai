@@ -1,6 +1,7 @@
 "use client";
 
 import { useCanvasStore } from "@/lib/store/canvasStore";
+import { StateSchemaEditor } from "./StateSchemaEditor";
 
 export function PropertiesPanel() {
   const { irDocument, selectedNodeId, selectedEdgeId, updateAgent, updateNode } =
@@ -8,10 +9,13 @@ export function PropertiesPanel() {
 
   if (!irDocument || !selectedNodeId) {
     return (
-      <div className="w-72 bg-[var(--bg-secondary)] border-l border-[var(--border-color)] p-4 shrink-0">
-        <p className="text-sm text-[var(--text-secondary)]">
-          Select a node to view its properties
-        </p>
+      <div className="w-72 bg-[var(--bg-secondary)] border-l border-[var(--border-color)] shrink-0 overflow-y-auto">
+        <div className="p-4">
+          <p className="text-sm text-[var(--text-secondary)]">
+            Select a node to view its properties
+          </p>
+        </div>
+        <StateSchemaEditor />
       </div>
     );
   }

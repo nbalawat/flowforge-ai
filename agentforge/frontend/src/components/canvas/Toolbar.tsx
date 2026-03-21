@@ -2,40 +2,128 @@
 
 import { useCanvasStore } from "@/lib/store/canvasStore";
 
-const TOOL_ITEMS = [
+const NODE_ITEMS = [
   { type: "agent", label: "Agent", icon: "A", color: "bg-blue-600" },
   { type: "tool", label: "Tool", icon: "T", color: "bg-purple-600" },
   { type: "condition", label: "Condition", icon: "?", color: "bg-yellow-600" },
   { type: "human", label: "Human", icon: "H", color: "bg-green-600" },
+  { type: "loop", label: "Loop", icon: "L", color: "bg-pink-600" },
+  { type: "parallel", label: "Parallel", icon: "P", color: "bg-cyan-600" },
+  { type: "subworkflow", label: "Sub", icon: "S", color: "bg-orange-600" },
 ] as const;
 
 export function Toolbar() {
-  const { addAgentNode, addToolNode, addConditionNode, addHumanInputNode } =
-    useCanvasStore();
+  const store = useCanvasStore();
 
   const handleAdd = (type: string) => {
-    // Place new nodes at a reasonable default position
-    const position = { x: 250 + Math.random() * 100, y: 200 + Math.random() * 100 };
+    const ir = store.irDocument;
+    if (!ir) return;
+
+    // Auto-layout: place below existing nodes with some randomness
+    const maxY = Math.max(
+      ...ir.workflow.nodes.map((n) => n.position.y),
+      50
+    );
+    const position = {
+      x: 200 + Math.random() * 150,
+      y: maxY + 100 + Math.random() * 40,
+    };
 
     switch (type) {
       case "agent":
-        addAgentNode({ name: "New Agent" }, position);
+        store.addAgentNode({ name: "New Agent" }, position);
         break;
       case "tool":
-        addToolNode({ name: "New Tool", description: "Tool description" }, position);
+        store.addToolNode({ name: "New Tool", description: "Tool description" }, position);
         break;
       case "condition":
-        addConditionNode("state.get('status') == 'approved'", position);
+        store.addConditionNode("state.get('status') == 'approved'", position);
         break;
       case "human":
-        addHumanInputNode("Please review the output.", position);
+        store.addHumanInputNode("Please review the output.", position);
         break;
+      case "loop": {
+        const nodeId = `node_${crypto.randomUUID().slice(0, 8)}`;
+        const irDoc = store.irDocument!;
+        store.setIRDocument({
+          ...irDoc,
+          workflow: {
+            ...irDoc.workflow,
+            nodes: [
+              ...irDoc.workflow.nodes,
+              {
+                id: nodeId,
+                name: "Loop",
+                type: "loop",
+                config: {
+                  loop: { max_iterations: 10, exit_condition: "" },
+                },
+                position,
+              },
+            ],
+          },
+        });
+        break;
+      }
+      case "parallel": {
+        const fanOutId = `node_${crypto.randomUUID().slice(0, 8)}`;
+        const fanInId = `node_${crypto.randomUUID().slice(0, 8)}`;
+        const irDoc = store.irDocument!;
+        store.setIRDocument({
+          ...irDoc,
+          workflow: {
+            ...irDoc.workflow,
+            nodes: [
+              ...irDoc.workflow.nodes,
+              {
+                id: fanOutId,
+                name: "Parallel",
+                type: "parallel_fan_out",
+                config: { parallel_fan_out: { fan_out_on: "items" } },
+                position,
+              },
+              {
+                id: fanInId,
+                name: "Join",
+                type: "parallel_fan_in",
+                config: { parallel_fan_in: { aggregation_strategy: "merge" } },
+                position: { x: position.x, y: position.y + 150 },
+              },
+            ],
+          },
+        });
+        break;
+      }
+      case "subworkflow": {
+        const nodeId = `node_${crypto.randomUUID().slice(0, 8)}`;
+        const irDoc = store.irDocument!;
+        store.setIRDocument({
+          ...irDoc,
+          workflow: {
+            ...irDoc.workflow,
+            nodes: [
+              ...irDoc.workflow.nodes,
+              {
+                id: nodeId,
+                name: "Subworkflow",
+                type: "subworkflow",
+                config: { subworkflow: { subworkflow_ref: "" } },
+                position,
+              },
+            ],
+          },
+        });
+        break;
+      }
     }
   };
 
   return (
-    <div className="w-14 bg-[var(--bg-secondary)] border-r border-[var(--border-color)] flex flex-col items-center py-4 gap-3 shrink-0">
-      {TOOL_ITEMS.map((item) => (
+    <div className="w-14 bg-[var(--bg-secondary)] border-r border-[var(--border-color)] flex flex-col items-center py-4 gap-2 shrink-0">
+      <div className="text-[8px] text-[var(--text-secondary)] uppercase tracking-wider mb-1">
+        Nodes
+      </div>
+      {NODE_ITEMS.map((item) => (
         <button
           key={item.type}
           onClick={() => handleAdd(item.type)}
@@ -49,10 +137,6 @@ export function Toolbar() {
           </div>
         </button>
       ))}
-
-      <div className="flex-1" />
-
-      {/* Framework selector could go here */}
     </div>
   );
 }
