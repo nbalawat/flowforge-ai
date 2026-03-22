@@ -36,6 +36,18 @@ class GeneratedFile:
 
 
 @dataclass
+class NodeMapping:
+    """Maps an IR node to its generated code location."""
+
+    node_id: str
+    node_name: str
+    node_type: str  # agent, condition, human_input, etc.
+    file_path: str  # relative path in generated project
+    function_name: str  # the function/class name
+    line_start: int  # approximate line number
+
+
+@dataclass
 class ProjectArtifact:
     """The complete generated project."""
 
@@ -43,6 +55,7 @@ class ProjectArtifact:
     files: list[GeneratedFile] = field(default_factory=list)
     requirements: list[str] = field(default_factory=list)  # pip dependencies
     errors: list[str] = field(default_factory=list)
+    node_mappings: list[NodeMapping] = field(default_factory=list)
 
     def add_file(self, path: str, content: str, is_executable: bool = False) -> None:
         self.files.append(GeneratedFile(path, content, is_executable))

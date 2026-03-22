@@ -35,6 +35,7 @@ from ..base import (
     CloudTarget,
     DeployArtifact,
     FrameworkGenerator,
+    NodeMapping,
     ProjectArtifact,
     TestArtifact,
     build_env_template,
@@ -106,10 +107,31 @@ class ClaudeAgentSDKGenerator:
 
         # Generate custom tools as MCP server
         if ir.tools:
-            artifact.add_file(
-                f"{name}/tools/custom_tools.py",
-                self._generate_tools_mcp_server(ir),
-            )
+            tools_file_path = f"{name}/tools/custom_tools.py"
+            tools_content = self._generate_tools_mcp_server(ir)
+            artifact.add_file(tools_file_path, tools_content)
+            # Map tool nodes
+            tool_line = 5
+            for tool_def in ir.tools:
+                if tool_def.type.value == "mcp_server":
+                    continue
+                tool_id = sanitize_identifier(tool_def.name)
+                # Find approximate line
+                lines = tools_content.split("\n")
+                for i, line in enumerate(lines):
+                    if line.startswith(f"def {tool_id}("):
+                        tool_line = i + 1
+                        break
+                for node in ir.workflow.nodes:
+                    if node.type == NodeType.TOOL_CALL and node.tool_ref == tool_def.id:
+                        artifact.node_mappings.append(NodeMapping(
+                            node_id=node.id,
+                            node_name=node.name or tool_def.name,
+                            node_type=node.type.value if hasattr(node.type, 'value') else str(node.type),
+                            file_path=tools_file_path,
+                            function_name=tool_id,
+                            line_start=tool_line,
+                        ))
 
         # Generate skill files
         for skill in ir.skills:
@@ -123,17 +145,56 @@ class ClaudeAgentSDKGenerator:
         for agent in ir.agents:
             if agent != ir.agents[0]:  # First agent is the main agent
                 agent_id = sanitize_identifier(agent.name)
+                subagent_file_path = f"{name}/.claude/agents/{agent_id}.md"
                 artifact.add_file(
-                    f"{name}/.claude/agents/{agent_id}.md",
+                    subagent_file_path,
                     self._generate_subagent_definition(agent, ir),
                 )
+                # Map agent nodes to subagent definition files
+                for node in ir.workflow.nodes:
+                    if node.type == NodeType.AGENT and node.agent_ref == agent.id:
+                        artifact.node_mappings.append(NodeMapping(
+                            node_id=node.id,
+                            node_name=node.name or agent.name,
+                            node_type=node.type.value if hasattr(node.type, 'value') else str(node.type),
+                            file_path=subagent_file_path,
+                            function_name=agent_id,
+                            line_start=1,
+                        ))
 
         # Generate hooks if defined
         if ir.hooks:
             artifact.add_file(f"{name}/hooks.py", self._generate_hooks(ir))
 
         # Generate main agent runner
-        artifact.add_file(f"{name}/main.py", self._generate_main(ir, name))
+        main_file_path = f"{name}/main.py"
+        artifact.add_file(main_file_path, self._generate_main(ir, name))
+
+        # Map the first (main) agent node to main.py
+        if ir.agents:
+            main_agent = ir.agents[0]
+            for node in ir.workflow.nodes:
+                if node.type == NodeType.AGENT and node.agent_ref == main_agent.id:
+                    artifact.node_mappings.append(NodeMapping(
+                        node_id=node.id,
+                        node_name=node.name or main_agent.name,
+                        node_type=node.type.value if hasattr(node.type, 'value') else str(node.type),
+                        file_path=main_file_path,
+                        function_name="main",
+                        line_start=1,
+                    ))
+
+        # Map condition/human_input nodes to main.py
+        for node in ir.workflow.nodes:
+            if node.type in (NodeType.CONDITION, NodeType.HUMAN_INPUT):
+                artifact.node_mappings.append(NodeMapping(
+                    node_id=node.id,
+                    node_name=node.name or node.id,
+                    node_type=node.type.value if hasattr(node.type, 'value') else str(node.type),
+                    file_path=main_file_path,
+                    function_name="main",
+                    line_start=1,
+                ))
 
         # Generate configuration
         artifact.add_file(f"{name}/config.py", self._generate_config(ir))

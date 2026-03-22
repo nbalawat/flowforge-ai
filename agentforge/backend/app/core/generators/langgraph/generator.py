@@ -37,6 +37,7 @@ from ..base import (
     CloudTarget,
     DeployArtifact,
     FrameworkGenerator,
+    NodeMapping,
     ProjectArtifact,
     TestArtifact,
     build_env_template,
@@ -88,21 +89,65 @@ class LangGraphGenerator:
         # Generate tool files
         for tool in ir.tools:
             tool_id = sanitize_identifier(tool.name)
-            artifact.add_file(
-                f"{name}/src/tools/{tool_id}.py",
-                self._generate_tool(tool),
-            )
+            file_path = f"{name}/src/tools/{tool_id}.py"
+            artifact.add_file(file_path, self._generate_tool(tool))
+            # Find corresponding node for this tool
+            for node in ir.workflow.nodes:
+                if node.type == NodeType.TOOL_CALL and node.tool_ref == tool.id:
+                    artifact.node_mappings.append(NodeMapping(
+                        node_id=node.id,
+                        node_name=node.name or tool.name,
+                        node_type=node.type.value if hasattr(node.type, 'value') else str(node.type),
+                        file_path=file_path,
+                        function_name=tool_id,
+                        line_start=6,
+                    ))
 
         # Generate agent node files
         for agent in ir.agents:
             agent_id = sanitize_identifier(agent.name)
-            artifact.add_file(
-                f"{name}/src/agents/{agent_id}.py",
-                self._generate_agent_node(agent, ir),
-            )
+            file_path = f"{name}/src/agents/{agent_id}.py"
+            artifact.add_file(file_path, self._generate_agent_node(agent, ir))
+            # Find corresponding node(s) for this agent
+            for node in ir.workflow.nodes:
+                if node.type == NodeType.AGENT and node.agent_ref == agent.id:
+                    artifact.node_mappings.append(NodeMapping(
+                        node_id=node.id,
+                        node_name=node.name or agent.name,
+                        node_type=node.type.value if hasattr(node.type, 'value') else str(node.type),
+                        file_path=file_path,
+                        function_name=agent_id,
+                        line_start=1,
+                    ))
 
         # Generate the graph definition
-        artifact.add_file(f"{name}/src/graph.py", self._generate_graph(ir))
+        graph_file_path = f"{name}/src/graph.py"
+        graph_content = self._generate_graph(ir)
+        artifact.add_file(graph_file_path, graph_content)
+
+        # Map condition and other non-agent/tool nodes to graph.py
+        line_offset = 10  # approximate starting line for routing functions
+        for node in ir.workflow.nodes:
+            if node.type == NodeType.CONDITION:
+                artifact.node_mappings.append(NodeMapping(
+                    node_id=node.id,
+                    node_name=node.name or node.id,
+                    node_type=node.type.value if hasattr(node.type, 'value') else str(node.type),
+                    file_path=graph_file_path,
+                    function_name=f"route_{sanitize_identifier(node.name or node.id)}",
+                    line_start=line_offset,
+                ))
+                line_offset += 10
+            elif node.type == NodeType.HUMAN_INPUT:
+                artifact.node_mappings.append(NodeMapping(
+                    node_id=node.id,
+                    node_name=node.name or node.id,
+                    node_type=node.type.value if hasattr(node.type, 'value') else str(node.type),
+                    file_path=graph_file_path,
+                    function_name="build_graph",
+                    line_start=line_offset,
+                ))
+                line_offset += 5
 
         # Generate main entry point
         artifact.add_file(f"{name}/src/main.py", self._generate_main(ir, name))

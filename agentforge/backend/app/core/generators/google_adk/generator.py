@@ -24,6 +24,7 @@ from ..base import (
     CloudTarget,
     DeployArtifact,
     FrameworkGenerator,
+    NodeMapping,
     ProjectArtifact,
     TestArtifact,
     build_env_template,
@@ -74,10 +75,58 @@ class GoogleADKGenerator:
         # Generate tool files
         for tool in ir.tools:
             tool_id = sanitize_identifier(tool.name)
-            artifact.add_file(f"{name}/tools/{tool_id}.py", self._generate_tool(tool))
+            file_path = f"{name}/tools/{tool_id}.py"
+            artifact.add_file(file_path, self._generate_tool(tool))
+            # Map tool nodes
+            for node in ir.workflow.nodes:
+                if node.type == NodeType.TOOL_CALL and node.tool_ref == tool.id:
+                    artifact.node_mappings.append(NodeMapping(
+                        node_id=node.id,
+                        node_name=node.name or tool.name,
+                        node_type=node.type.value if hasattr(node.type, 'value') else str(node.type),
+                        file_path=file_path,
+                        function_name=tool_id,
+                        line_start=4,
+                    ))
 
         # Generate the agent hierarchy
-        artifact.add_file(f"{name}/agent.py", self._generate_agent_module(ir, name))
+        agent_file_path = f"{name}/agent.py"
+        agent_content = self._generate_agent_module(ir, name)
+        artifact.add_file(agent_file_path, agent_content)
+
+        # Map agent nodes to agent.py - estimate line positions
+        agent_line = 1
+        for agent in ir.agents:
+            agent_id = sanitize_identifier(agent.name)
+            var_name = f"{agent_id}_agent"
+            # Find approximate line by searching generated content
+            lines = agent_content.split("\n")
+            for i, line in enumerate(lines):
+                if line.startswith(f"{var_name} = "):
+                    agent_line = i + 1
+                    break
+            for node in ir.workflow.nodes:
+                if node.type == NodeType.AGENT and node.agent_ref == agent.id:
+                    artifact.node_mappings.append(NodeMapping(
+                        node_id=node.id,
+                        node_name=node.name or agent.name,
+                        node_type=node.type.value if hasattr(node.type, 'value') else str(node.type),
+                        file_path=agent_file_path,
+                        function_name=var_name,
+                        line_start=agent_line,
+                    ))
+
+        # Map condition/human_input nodes to agent.py (routing is in orchestrator)
+        for node in ir.workflow.nodes:
+            if node.type in (NodeType.CONDITION, NodeType.HUMAN_INPUT):
+                artifact.node_mappings.append(NodeMapping(
+                    node_id=node.id,
+                    node_name=node.name or node.id,
+                    node_type=node.type.value if hasattr(node.type, 'value') else str(node.type),
+                    file_path=agent_file_path,
+                    function_name="root_agent",
+                    line_start=len(agent_content.split("\n")) - 5,
+                ))
 
         # Generate the runner
         artifact.add_file(f"{name}/main.py", self._generate_main(ir, name))

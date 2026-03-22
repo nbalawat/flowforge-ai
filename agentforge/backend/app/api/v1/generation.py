@@ -45,11 +45,21 @@ class GeneratedFileResponse(BaseModel):
     content: str
 
 
+class NodeMappingResponse(BaseModel):
+    node_id: str
+    node_name: str
+    node_type: str
+    file_path: str
+    function_name: str
+    line_start: int
+
+
 class GenerateResponse(BaseModel):
     framework: str
     files: list[GeneratedFileResponse]
     requirements: list[str]
     errors: list[str]
+    node_mappings: list[NodeMappingResponse] = []
 
 
 class GenerateZipRequest(BaseModel):
@@ -67,6 +77,22 @@ class FrameworkInfo(BaseModel):
 
 class ListFrameworksResponse(BaseModel):
     frameworks: list[FrameworkInfo]
+
+
+class ValidateRequest(BaseModel):
+    ir_document: dict
+    target_framework: str
+
+
+class ValidationStageResult(BaseModel):
+    name: str
+    passed: bool
+    issues: list[str]
+
+
+class ValidateResponse(BaseModel):
+    is_valid: bool
+    stages: list[ValidationStageResult]
 
 
 # ============================================================================
@@ -182,6 +208,17 @@ async def generate_code(request: GenerateRequest) -> GenerateResponse:
         ],
         requirements=artifact.requirements,
         errors=artifact.errors,
+        node_mappings=[
+            NodeMappingResponse(
+                node_id=nm.node_id,
+                node_name=nm.node_name,
+                node_type=nm.node_type,
+                file_path=nm.file_path,
+                function_name=nm.function_name,
+                line_start=nm.line_start,
+            )
+            for nm in artifact.node_mappings
+        ],
     )
 
 
@@ -215,4 +252,77 @@ async def generate_zip(request: GenerateZipRequest) -> Response:
         content=zip_bytes,
         media_type="application/zip",
         headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
+
+
+@router.post("/validate", response_model=ValidateResponse)
+async def validate_ir_endpoint(request: ValidateRequest) -> ValidateResponse:
+    """Validate an IR document and return per-stage results."""
+    # Parse IR
+    try:
+        ir = IRDocument(**request.ir_document)
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid IR document: {e}")
+
+    # Get framework (optional for validation)
+    target_framework = None
+    if request.target_framework:
+        try:
+            target_framework = TargetFramework(request.target_framework)
+        except ValueError:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unknown framework: {request.target_framework}",
+            )
+
+    # Run validation pipeline
+    result = validate_ir(ir, target_framework)
+
+    # Map stage names from internal names to display names
+    stage_display_names = {
+        "referential_integrity": "Referential Integrity",
+        "graph_validity": "Graph Validity",
+        "semantic": "Semantic Validation",
+        "framework_compatibility": "Framework Compatibility",
+        "security": "Security Scan",
+    }
+
+    # Collect issues by stage
+    all_stage_names = [
+        "Schema Validation",
+        "Referential Integrity",
+        "Graph Validity",
+        "Semantic Validation",
+        "Framework Compatibility",
+        "Security Scan",
+    ]
+
+    issues_by_display_name: dict[str, list[str]] = {name: [] for name in all_stage_names}
+    for issue in result.issues:
+        display_name = stage_display_names.get(issue.stage, issue.stage)
+        if display_name in issues_by_display_name:
+            issues_by_display_name[display_name].append(issue.message)
+
+    # Schema validation is implicit (Pydantic) -- if we got here, it passed
+    stages = []
+    for stage_name in all_stage_names:
+        stage_issues = issues_by_display_name.get(stage_name, [])
+        # A stage fails if there are error-severity issues for it
+        stage_errors = [
+            issue
+            for issue in result.issues
+            if stage_display_names.get(issue.stage, issue.stage) == stage_name
+            and issue.severity.value == "error"
+        ]
+        stages.append(
+            ValidationStageResult(
+                name=stage_name,
+                passed=len(stage_errors) == 0,
+                issues=stage_issues,
+            )
+        )
+
+    return ValidateResponse(
+        is_valid=result.is_valid,
+        stages=stages,
     )
