@@ -11,30 +11,44 @@ interface ConditionNodeData {
 export const ConditionNode = memo(({ data, selected }: NodeProps<ConditionNodeData>) => {
   return (
     <div
-      className={`px-4 py-3 rounded-lg border-2 min-w-[160px] shadow-lg ${
+      className={`rounded-xl border-2 min-w-[180px] max-w-[260px] shadow-lg transition-all ${
         selected
-          ? "border-[var(--accent)] bg-[#1e1e3a]"
-          : "border-[#6a5a3a] bg-[#1e1a14]"
+          ? "border-yellow-400 bg-[#1e1e3a] shadow-yellow-400/20 shadow-xl"
+          : "border-[#6a5a3a] bg-[#1e1a14] hover:border-yellow-600"
       }`}
-      style={{ transform: "rotate(0deg)" }} // Diamond shape could be achieved with CSS
     >
-      <Handle type="target" position={Position.Top} className="!bg-yellow-400" />
+      <Handle type="target" position={Position.Top} className="!bg-yellow-400 !w-3 !h-3 !-top-1.5" />
 
-      <div className="flex items-center gap-2 mb-1">
-        <div className="w-6 h-6 rounded bg-yellow-600 flex items-center justify-center text-xs font-bold">
-          ?
+      {/* Header */}
+      <div className="px-3 py-2 border-b border-yellow-900/30">
+        <div className="flex items-center gap-2">
+          <div className="w-7 h-7 rounded-lg bg-yellow-600 flex items-center justify-center text-sm font-bold">
+            ?
+          </div>
+          <div className="min-w-0 flex-1">
+            <span className="font-semibold text-sm text-yellow-200">{data.label}</span>
+            <p className="text-[10px] text-yellow-500/70">Conditional Branch</p>
+          </div>
         </div>
-        <span className="font-medium text-sm">{data.label}</span>
       </div>
 
+      {/* Expression preview */}
       {data.expression && (
-        <p className="text-xs text-[var(--text-secondary)] font-mono truncate mt-1">
-          {data.expression}
-        </p>
+        <div className="px-3 py-1.5 border-b border-yellow-900/20">
+          <code className="text-[10px] text-amber-300 font-mono block truncate">
+            {data.expression}
+          </code>
+        </div>
       )}
 
-      <Handle type="source" position={Position.Bottom} id="true" className="!bg-green-400 !left-[30%]" />
-      <Handle type="source" position={Position.Bottom} id="false" className="!bg-red-400 !left-[70%]" />
+      {/* Output labels */}
+      <div className="px-3 py-1.5 flex justify-between">
+        <span className="text-[9px] text-green-400 font-semibold">✓ True</span>
+        <span className="text-[9px] text-red-400 font-semibold">✗ False</span>
+      </div>
+
+      <Handle type="source" position={Position.Bottom} id="true" className="!bg-green-400 !w-3 !h-3 !-bottom-1.5 !left-[30%]" />
+      <Handle type="source" position={Position.Bottom} id="false" className="!bg-red-400 !w-3 !h-3 !-bottom-1.5 !left-[70%]" />
     </div>
   );
 });

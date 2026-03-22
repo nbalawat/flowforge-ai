@@ -109,14 +109,16 @@ function CanvasInner() {
             label: agent.name,
             agentRef: agent.id,
             role: agent.role,
+            instructions: agent.instructions,
             toolCount: agent.tools.length,
+            toolNames: agent.tools.map((tid) => irDocument.tools.find((t) => t.id === tid)?.name || tid),
             modelName: agent.llm_config?.model || irDocument.config.default_llm.model,
-            hasMemory: agent.memory_config.long_term_enabled,
-            canDelegate: agent.delegation.can_delegate,
+            hasMemory: agent.memory_config?.long_term_enabled,
+            canDelegate: agent.delegation?.can_delegate,
             capabilityFlags: {
-              code: agent.capabilities.code_execution,
-              web: agent.capabilities.web_browsing,
-              file: agent.capabilities.file_access,
+              code: agent.capabilities?.code_execution,
+              web: agent.capabilities?.web_browsing,
+              file: agent.capabilities?.file_access,
             },
           };
         }
@@ -140,6 +142,7 @@ function CanvasInner() {
         data = {
           label: node.name || "Human Review",
           prompt: node.config.human_input?.prompt_template,
+          inputType: node.config.human_input?.input_type,
         };
       } else if (node.type === "entry" || node.type === "exit") {
         data = {

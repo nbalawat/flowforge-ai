@@ -95,6 +95,7 @@ export interface ToolDefinition {
   implementation?: ToolImplementation;
   rate_limit_rpm?: number;
   timeout_seconds?: number;
+  require_approval?: boolean;
 }
 
 export interface MemoryConfig {
