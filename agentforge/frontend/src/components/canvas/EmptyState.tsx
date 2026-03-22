@@ -1,15 +1,18 @@
 "use client";
 
+import { useState } from "react";
 import { useCanvasStore } from "@/lib/store/canvasStore";
 
 /**
- * Overlay shown on a fresh canvas (only Start + End nodes) to guide new users.
+ * Non-blocking suggestion shown on a fresh canvas (only Start + End nodes).
+ * Can be dismissed — it's a hint, not a gate.
  */
 export function EmptyState() {
+  const [dismissed, setDismissed] = useState(false);
   const { irDocument, openTemplateGallery, toggleCopilot, isCopilotOpen } =
     useCanvasStore();
 
-  // Only show when the project has exactly the default nodes (Start + End)
+  if (dismissed) return null;
   if (!irDocument) return null;
 
   const workflowNodes = irDocument.workflow.nodes;
@@ -21,8 +24,17 @@ export function EmptyState() {
   if (!hasOnlyEntryExit) return null;
 
   return (
-    <div className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none">
-      <div className="pointer-events-auto bg-[var(--bg-secondary)]/90 backdrop-blur-sm border border-[var(--border-color)] rounded-2xl p-8 max-w-md text-center shadow-2xl">
+    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10">
+      <div className="relative bg-[var(--bg-secondary)]/95 backdrop-blur-sm border border-[var(--border-color)] rounded-2xl p-8 max-w-md text-center shadow-2xl">
+        {/* Close / Dismiss button */}
+        <button
+          onClick={() => setDismissed(true)}
+          className="absolute top-3 right-3 w-6 h-6 rounded-full flex items-center justify-center text-[var(--text-secondary)] hover:text-white hover:bg-[var(--bg-primary)] transition-colors"
+          title="Dismiss"
+        >
+          ✕
+        </button>
+
         {/* Icon */}
         <div className="w-14 h-14 mx-auto mb-4 rounded-xl bg-[var(--accent)]/10 border border-[var(--accent)]/20 flex items-center justify-center">
           <svg
@@ -50,7 +62,10 @@ export function EmptyState() {
 
         {/* Primary CTA */}
         <button
-          onClick={openTemplateGallery}
+          onClick={() => {
+            setDismissed(true);
+            openTemplateGallery();
+          }}
           className="w-full py-2.5 rounded-lg text-sm font-medium bg-[var(--accent)] text-white hover:brightness-110 transition-all mb-3"
         >
           Start from a Template
@@ -59,6 +74,7 @@ export function EmptyState() {
         {/* Secondary CTA */}
         <button
           onClick={() => {
+            setDismissed(true);
             if (!isCopilotOpen) toggleCopilot();
           }}
           className="w-full py-2 rounded-lg text-xs font-medium border border-[var(--border-color)] text-[var(--text-secondary)] hover:text-white hover:border-[var(--accent)]/50 transition-all"
