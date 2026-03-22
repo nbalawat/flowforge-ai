@@ -34,9 +34,9 @@
 
 ### Visual Workflow Canvas
 <p align="center">
-  <img src="docs/screenshots/03-complex-workflow-v2.png" alt="Complex Workflow" width="800" />
+  <img src="docs/screenshots/03-complex-workflow-v3.png" alt="Complex Workflow" width="800" />
 </p>
-<p align="center"><em>Content Moderation Pipeline — agents, conditional routing ("Is Safe?"), HITL review, color-coded edges, state schema, and guidance bar</em></p>
+<p align="center"><em>Enterprise Support Escalation — 6 agents, urgency-based conditional routing (Low/Medium/High), HITL review, 8 state fields with merge reducers, color-coded edges, and mini-map</em></p>
 
 ### AI Copilot
 <p align="center">
@@ -75,12 +75,6 @@
   <img src="docs/screenshots/13-certified-download.png" alt="Certified Download" width="800" />
 </p>
 <p align="center"><em>Workflow Certified — summary with framework, files, validation results, and Download ZIP button for production-ready code</em></p>
-
-### About & Documentation
-<p align="center">
-  <img src="docs/screenshots/06-about-page.png" alt="About Page" width="800" />
-</p>
-<p align="center"><em>Built-in documentation page with feature overview, requirements, and getting started guide</em></p>
 
 ---
 
@@ -166,8 +160,6 @@ docker compose up -d
 
 Navigate to **[http://localhost:3001](http://localhost:3001)** in your browser.
 
-The About / landing page is available at [http://localhost:3001/about](http://localhost:3001/about).
-
 ---
 
 ## Configuration
@@ -219,7 +211,7 @@ Each generator produces a complete project structure including the main applicat
 agentforge/
 ├── frontend/                   # Next.js 15 application
 │   └── src/
-│       ├── app/                # Pages (studio, about, dashboard)
+│       ├── app/                # Pages (studio, dashboard)
 │       ├── components/         # React components
 │       │   ├── canvas/         #   Visual workflow canvas
 │       │   ├── copilot/        #   AI Copilot chat panel
