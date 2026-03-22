@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import Link from "next/link";
+/* Use <a> instead of Next <> because studio (/) has a completely
+   different layout and client-side routing doesn't reliably navigate
+   across layout boundaries. */
 
 /* ------------------------------------------------------------------ */
 /*  Intersection-observer fade-in hook                                 */
@@ -267,19 +269,19 @@ export default function AboutPage() {
       {/* ============================================================ */}
       <nav className="fixed top-0 left-0 right-0 z-50 backdrop-blur-md bg-[var(--bg-primary)]/80 border-b border-[var(--border-color)]">
         <div className="max-w-6xl mx-auto flex items-center justify-between px-6 h-14">
-          <Link href="/about" className="text-lg font-bold tracking-tight">
+          <a href="/about" className="text-lg font-bold tracking-tight">
             <span className="gradient-text">AgentForge</span>
-          </Link>
+          </a>
           <div className="flex items-center gap-4">
             <a href="#features" className="text-sm text-[var(--text-secondary)] hover:text-white transition-colors">Features</a>
             <a href="#frameworks" className="text-sm text-[var(--text-secondary)] hover:text-white transition-colors">Frameworks</a>
             <a href="#quickstart" className="text-sm text-[var(--text-secondary)] hover:text-white transition-colors">Get Started</a>
-            <Link
-              href="/"
+            <a
+              href="/" onClick={(e) => { e.preventDefault(); window.location.href = "/"; }}
               className="ml-2 px-4 py-1.5 text-sm font-medium rounded-lg bg-[var(--accent)] text-white hover:brightness-110 transition-all"
             >
               Open Studio
-            </Link>
+            </a>
           </div>
         </div>
       </nav>
@@ -307,12 +309,12 @@ export default function AboutPage() {
           </p>
 
           <div className="flex items-center justify-center gap-4 flex-wrap">
-            <Link
-              href="/"
+            <a
+              href="/" onClick={(e) => { e.preventDefault(); window.location.href = "/"; }}
               className="px-6 py-3 rounded-lg font-semibold text-sm bg-[var(--accent)] text-white hover:brightness-110 transition-all shadow-lg shadow-[var(--accent)]/20"
             >
               Open Studio {icons.arrow}
-            </Link>
+            </a>
             <a
               href="#"
               className="px-6 py-3 rounded-lg font-semibold text-sm border border-[var(--border-color)] text-[var(--text-secondary)] hover:border-[var(--accent)] hover:text-white transition-all flex items-center gap-2"
@@ -554,7 +556,7 @@ export default function AboutPage() {
             </div>
 
             <div className="flex items-center gap-6 text-sm text-[var(--text-secondary)]">
-              <Link href="/" className="hover:text-white transition-colors">Studio</Link>
+              <a href="/" onClick={(e) => { e.preventDefault(); window.location.href = "/"; }} className="hover:text-white transition-colors">Studio</a>
               <a href="#" className="hover:text-white transition-colors">GitHub</a>
               <a href="#" className="hover:text-white transition-colors">Documentation</a>
             </div>
