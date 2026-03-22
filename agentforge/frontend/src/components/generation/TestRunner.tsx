@@ -88,6 +88,7 @@ export function TestRunner() {
   if (!isOpen) {
     return (
       <button
+        data-test-runner-trigger
         onClick={() => {
           setIsOpen(true);
           handlePreviewCode();

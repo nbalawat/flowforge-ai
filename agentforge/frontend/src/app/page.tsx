@@ -11,6 +11,7 @@ import { CommandPalette } from "@/components/common/CommandPalette";
 import { NodeEditorModal } from "@/components/editors/NodeEditorModal";
 import { TemplateGallery } from "@/components/templates/TemplateGallery";
 import { EmptyState } from "@/components/canvas/EmptyState";
+import { WorkflowActionBar } from "@/components/canvas/WorkflowActionBar";
 import { useCanvasStore } from "@/lib/store/canvasStore";
 
 export default function Home() {
@@ -110,6 +111,7 @@ export default function Home() {
         <div className="flex-1 relative">
           <Canvas />
           <EmptyState />
+          <WorkflowActionBar />
         </div>
 
         {/* Properties Panel */}
