@@ -9,6 +9,8 @@ import { TestRunner } from "@/components/generation/TestRunner";
 import { HeaderActions } from "@/components/common/HeaderActions";
 import { CommandPalette } from "@/components/common/CommandPalette";
 import { NodeEditorModal } from "@/components/editors/NodeEditorModal";
+import { TemplateGallery } from "@/components/templates/TemplateGallery";
+import { EmptyState } from "@/components/canvas/EmptyState";
 import { useCanvasStore } from "@/lib/store/canvasStore";
 
 export default function Home() {
@@ -107,6 +109,7 @@ export default function Home() {
         {/* Canvas */}
         <div className="flex-1 relative">
           <Canvas />
+          <EmptyState />
         </div>
 
         {/* Properties Panel */}
@@ -124,6 +127,9 @@ export default function Home() {
 
       {/* Node Editor Modal (double-click to open) */}
       <NodeEditorModal />
+
+      {/* Template Gallery */}
+      <TemplateGallery />
     </div>
   );
 }

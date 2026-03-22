@@ -14,6 +14,7 @@ export function HeaderActions() {
     clearCanvas,
     createNewProject,
     renameProject,
+    openTemplateGallery,
     undo,
     redo,
     undoStack,
@@ -134,6 +135,11 @@ export function HeaderActions() {
         {/* New */}
         <ActionButton onClick={handleNew} title="New workflow">
           New
+        </ActionButton>
+
+        {/* Templates */}
+        <ActionButton onClick={openTemplateGallery} title="Browse workflow templates">
+          Templates
         </ActionButton>
 
         {/* Open saved */}

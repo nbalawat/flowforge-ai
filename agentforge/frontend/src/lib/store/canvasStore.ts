@@ -40,6 +40,7 @@ interface CanvasState {
   // UI state
   isLoading: boolean;
   isCopilotOpen: boolean;
+  isTemplateGalleryOpen: boolean;
   selectedFramework: TargetFramework;
 
   // Undo/redo history
@@ -100,6 +101,8 @@ interface CanvasState {
 
   // Actions: UI
   toggleCopilot: () => void;
+  openTemplateGallery: () => void;
+  closeTemplateGallery: () => void;
   setFramework: (framework: TargetFramework) => void;
 }
 
@@ -179,6 +182,7 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
   editingNodeId: null,
   isLoading: false,
   isCopilotOpen: true,
+  isTemplateGalleryOpen: false,
   selectedFramework: "langgraph",
   undoStack: [],
   redoStack: [],
@@ -733,5 +737,7 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
   selectEdge: (edgeId) => set({ selectedEdgeId: edgeId, selectedNodeId: null }),
 
   toggleCopilot: () => set((state) => ({ isCopilotOpen: !state.isCopilotOpen })),
+  openTemplateGallery: () => set({ isTemplateGalleryOpen: true }),
+  closeTemplateGallery: () => set({ isTemplateGalleryOpen: false }),
   setFramework: (framework) => set({ selectedFramework: framework }),
 }));

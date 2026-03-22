@@ -60,6 +60,7 @@ export function CommandPalette() {
       { id: "redo", label: "Redo", category: "Edit", shortcut: "Ctrl+Shift+Z", action: () => { store.redo(); setIsOpen(false); } },
 
       // UI
+      { id: "browse-templates", label: "Browse Templates", category: "Project", action: () => { store.openTemplateGallery(); setIsOpen(false); } },
       { id: "toggle-copilot", label: "Toggle AI Copilot", category: "View", action: () => { store.toggleCopilot(); setIsOpen(false); } },
       { id: "framework-langgraph", label: "Switch to LangGraph", category: "Framework", action: () => { store.setFramework("langgraph"); setIsOpen(false); } },
       { id: "framework-adk", label: "Switch to Google ADK", category: "Framework", action: () => { store.setFramework("google_adk"); setIsOpen(false); } },
