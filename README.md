@@ -32,35 +32,55 @@
 </p>
 <p align="center"><em>8 pre-built workflow templates from Beginner to Expert — with difficulty badges, feature tags, and one-click loading</em></p>
 
-### Complex Workflow Canvas
+### Visual Workflow Canvas
 <p align="center">
-  <img src="docs/screenshots/03-complex-workflow.png" alt="Complex Workflow" width="800" />
+  <img src="docs/screenshots/03-complex-workflow-v2.png" alt="Complex Workflow" width="800" />
 </p>
-<p align="center"><em>Enterprise Support Escalation workflow — 6 agents, conditions, HITL, tools, and multi-path routing on a visual canvas</em></p>
-
-### Node Properties & Configuration
-<p align="center">
-  <img src="docs/screenshots/04-node-properties.png" alt="Node Properties" width="800" />
-</p>
-<p align="center"><em>Click any node to view and edit its properties — agent config, tools, state schema, and inline prompt playground</em></p>
+<p align="center"><em>Content Moderation Pipeline — agents, conditional routing ("Is Safe?"), HITL review, color-coded edges, state schema, and guidance bar</em></p>
 
 ### AI Copilot
 <p align="center">
   <img src="docs/screenshots/05-ai-copilot.png" alt="AI Copilot" width="800" />
 </p>
-<p align="center"><em>Claude-powered copilot — describe what you want in natural language and watch the canvas update automatically</em></p>
+<p align="center"><em>Claude-powered copilot with quick actions — describe what you want in natural language and watch the canvas update</em></p>
+
+### 5-Stage Certification Pipeline
+
+**Step 1 — Choose a Framework**
+<p align="center">
+  <img src="docs/screenshots/08-framework-selection.png" alt="Framework Selection" width="800" />
+</p>
+<p align="center"><em>Select from 6 frameworks: LangGraph, Google ADK, Claude Agent SDK, CrewAI, AutoGen, AWS Strands</em></p>
+
+**Step 2 — Code Generation**
+<p align="center">
+  <img src="docs/screenshots/09-code-generation.png" alt="Code Generation" width="800" />
+</p>
+<p align="center"><em>7 Python files generated for Google ADK — agents, tools, orchestrator, requirements, and test harness</em></p>
+
+**Step 3 — Validation**
+<p align="center">
+  <img src="docs/screenshots/10-validation.png" alt="Validation" width="800" />
+</p>
+<p align="center"><em>6 automated validation checks: Schema, Referential Integrity, Graph Validity, Semantic, Framework Compatibility, Security Scan — all passed</em></p>
+
+**Step 4 — Live LLM Test Execution**
+<p align="center">
+  <img src="docs/screenshots/12-test-passed.png" alt="Test Passed" width="800" />
+</p>
+<p align="center"><em>Real execution with Google ADK and Gemini — PASSED with structured execution trace showing agent hierarchy and responses</em></p>
+
+**Step 5 — Certified & Download**
+<p align="center">
+  <img src="docs/screenshots/13-certified-download.png" alt="Certified Download" width="800" />
+</p>
+<p align="center"><em>Workflow Certified — summary with framework, files, validation results, and Download ZIP button for production-ready code</em></p>
 
 ### About & Documentation
 <p align="center">
   <img src="docs/screenshots/06-about-page.png" alt="About Page" width="800" />
 </p>
 <p align="center"><em>Built-in documentation page with feature overview, requirements, and getting started guide</em></p>
-
-### Command Palette
-<p align="center">
-  <img src="docs/screenshots/07-command-palette.png" alt="Command Palette" width="800" />
-</p>
-<p align="center"><em>Cmd+K command palette for quick actions — add nodes, switch frameworks, manage projects, and navigate templates</em></p>
 
 ---
 
