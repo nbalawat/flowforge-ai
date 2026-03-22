@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef } from "react";
+import Link from "next/link";
 import { useCanvasStore } from "@/lib/store/canvasStore";
 
 export function HeaderActions() {
@@ -235,6 +236,21 @@ export function HeaderActions() {
         <ActionButton onClick={handleImport} title="Import workflow from JSON">
           Import
         </ActionButton>
+
+        <div className="w-px h-5 bg-[var(--border-color)] mx-1" />
+
+        {/* About */}
+        <Link
+          href="/about"
+          title="About AgentForge"
+          className="px-2 py-1 text-xs rounded border border-[var(--border-color)] text-[var(--text-secondary)] hover:border-[var(--accent)] hover:text-white transition-colors flex items-center gap-1"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-3.5 h-3.5">
+            <circle cx="12" cy="12" r="10" />
+            <path d="M12 16v-4M12 8h.01" />
+          </svg>
+          About
+        </Link>
       </div>
 
       {/* Click outside to close project menu */}
