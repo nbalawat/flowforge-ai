@@ -97,6 +97,7 @@ async def execute_generated_project(
         run_env = os.environ.copy()
         if env_vars:
             run_env.update(env_vars)
+        run_env["TEST_MESSAGE"] = test_message
 
         # Run the test script
         test_script = project_path / "test_run.py"

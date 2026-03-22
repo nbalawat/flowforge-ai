@@ -153,6 +153,7 @@ class LangGraphGenerator:
         artifact.add_file(f"{name}/src/main.py", self._generate_main(ir, name))
 
         # Generate __init__ files
+        artifact.add_file(f"{name}/__init__.py", "")
         artifact.add_file(f"{name}/src/__init__.py", "")
         artifact.add_file(f"{name}/src/agents/__init__.py", "")
         artifact.add_file(f"{name}/src/tools/__init__.py", "")
@@ -175,6 +176,9 @@ class LangGraphGenerator:
         artifact.add_file(f"{name}/.env.example", build_env_template(env_vars))
 
         artifact.add_file(f"{name}/Dockerfile", self._generate_dockerfile(name))
+
+        # Generate test_run.py at project root (used by execution runner)
+        artifact.add_file(f"{name}/test_run.py", self._generate_test_run(ir, name))
 
         return artifact
 
@@ -233,9 +237,13 @@ class LangGraphGenerator:
         lines.append("")
 
         fields = ir.workflow.state_schema.fields
-        if not fields:
-            # Default state with messages
+        # Always include messages field for LangGraph (needed for chat-based agents)
+        has_messages = any(f.name == "messages" for f in fields)
+        if not has_messages:
             lines.append("    messages: Annotated[list[Any], operator.add]")
+
+        if not fields:
+            pass  # messages already added above
         else:
             for field in fields:
                 py_type = type_map.get(field.type, "Any")
@@ -470,24 +478,21 @@ class LangGraphGenerator:
                 # Condition nodes are handled via conditional edges, not as graph nodes
                 node_to_func[node.id] = f"__condition_{sanitize_identifier(node.name or node.id)}"
 
-            elif node.type in (NodeType.ENTRY, NodeType.EXIT):
-                node_to_func[node.id] = node.id
+            elif node.type == NodeType.ENTRY:
+                node_to_func[node.id] = "__START__"
+            elif node.type == NodeType.EXIT:
+                node_to_func[node.id] = "__END__"
+
+            elif node.type == NodeType.HUMAN_INPUT:
+                # HITL nodes become passthrough nodes in LangGraph
+                node_name = sanitize_identifier(node.name or f"human_{node.id}")
+                node_to_func[node.id] = node_name
+                lines.append(f'    graph.add_node("{node_name}", lambda state: state)  # HITL placeholder')
 
         lines.append("")
 
         # Add edges
         lines.append("    # Add edges")
-
-        # Entry edge — auto-detect if not set
-        entry_node_id = ir.workflow.entry_node
-        if not entry_node_id:
-            entry_nodes = [n for n in ir.workflow.nodes if n.type == "entry"]
-            entry_node_id = entry_nodes[0].id if entry_nodes else None
-
-        if entry_node_id:
-            entry_target = node_to_func.get(entry_node_id, "")
-            if entry_target and not entry_target.startswith("__condition_"):
-                lines.append(f'    graph.add_edge(START, "{entry_target}")')
 
         # Regular and conditional edges
         for edge in ir.workflow.edges:
@@ -501,61 +506,76 @@ class LangGraphGenerator:
             if source.startswith("__condition_"):
                 continue
 
-            if edge.target in [n for n in ir.workflow.exit_nodes]:
-                lines.append(f'    graph.add_edge("{source}", END)')
-            elif edge.type == EdgeType.DEFAULT:
-                if not target.startswith("__condition_"):
-                    lines.append(f'    graph.add_edge("{source}", "{target}")')
+            # Map START/END markers to LangGraph constants
+            actual_source = "START" if source == "__START__" else f'"{source}"'
+            actual_target = "END" if target == "__END__" else f'"{target}"'
+
+            if edge.type == EdgeType.DEFAULT:
+                # Skip edges to/from condition nodes (handled by conditional_edges)
+                if target.startswith("__condition_") or source.startswith("__condition_"):
+                    continue
+                lines.append(f'    graph.add_edge({actual_source}, {actual_target})')
             elif edge.type == EdgeType.CONDITIONAL:
                 # Collect all conditional edges from this source
                 pass  # Handled in batch below
 
-        # Handle conditional edges (group by source node)
-        cond_edges_by_source: dict[str, list] = {}
-        for edge in ir.workflow.edges:
-            if edge.type == EdgeType.CONDITIONAL:
-                source = node_to_func.get(edge.source, "")
-                if source:
-                    cond_edges_by_source.setdefault(source, []).append(edge)
+        # Handle conditional edges
+        # In AgentForge IR, conditions are modeled as:
+        #   predecessor_node → condition_node → target_nodes (via conditional edges)
+        # In LangGraph, this becomes:
+        #   graph.add_conditional_edges(predecessor, routing_fn, path_map)
 
-        for source, edges in cond_edges_by_source.items():
-            if source.startswith("__condition_"):
-                # Find the actual source (the node before the condition)
+        # Find condition nodes and their predecessors
+        condition_nodes = {n.id: n for n in ir.workflow.nodes if n.type == NodeType.CONDITION}
+
+        for cond_id, cond_node in condition_nodes.items():
+            # Find the predecessor: who connects to this condition node?
+            predecessor_edge = next(
+                (e for e in ir.workflow.edges if e.target == cond_id and e.type == EdgeType.DEFAULT),
+                None
+            )
+            if not predecessor_edge:
                 continue
 
-            lines.append("")
-            lines.append(f"    # Conditional routing from {source}")
+            pred_func = node_to_func.get(predecessor_edge.source, "")
+            if not pred_func or pred_func in ("__START__", "__END__"):
+                continue
 
-            # Build the routing function
-            router_name = f"route_{sanitize_identifier(source)}"
+            # Find outgoing conditional edges from this condition node
+            cond_out_edges = [
+                e for e in ir.workflow.edges
+                if e.source == cond_id and e.type == EdgeType.CONDITIONAL
+            ]
+            if not cond_out_edges:
+                continue
+
+            # Remove the default edge we already added (predecessor → condition)
+            # by noting it — we'll replace it with conditional_edges
+            lines.append("")
+            lines.append(f"    # Conditional routing after {pred_func}")
+
+            router_name = f"route_{sanitize_identifier(pred_func)}"
             lines.append(f"    def {router_name}(state: AgentState) -> str:")
 
-            for edge in edges:
-                target = node_to_func.get(edge.target, "END")
-                if target in ir.workflow.exit_nodes:
-                    target = "END"
+            path_map = {}
+            for edge in cond_out_edges:
+                target = node_to_func.get(edge.target, "__END__")
+                target_val = "END" if target == "__END__" else target
                 if edge.condition:
                     expr = edge.condition.expression
-                    label = edge.condition.label or target
                     lines.append(f"        if {expr}:")
-                    lines.append(f'            return "{target}"')
+                    lines.append(f'            return "{target_val}"')
+                path_map[target_val] = target_val
 
             # Default fallback
-            default_target = node_to_func.get(edges[-1].target, "END")
-            lines.append(f'        return "{default_target}"')
-
-            # Build the path map
-            path_map = {}
-            for edge in edges:
-                target = node_to_func.get(edge.target, "")
-                if target:
-                    target_val = "END" if edge.target in ir.workflow.exit_nodes else target
-                    path_map[target_val] = target_val
+            last_target = node_to_func.get(cond_out_edges[-1].target, "__END__")
+            last_val = "END" if last_target == "__END__" else last_target
+            lines.append(f'        return "{last_val}"')
 
             path_map_str = ", ".join(f'"{k}": "{v}"' for k, v in path_map.items())
             lines.append(
-                f"    graph.add_conditional_edges(\"{source}\", {router_name}, "
-                f"{{{path_map_str}}})"
+                f'    graph.add_conditional_edges("{pred_func}", {router_name}, '
+                f'{{{path_map_str}}})'
             )
 
         lines.append("")
@@ -601,6 +621,83 @@ class LangGraphGenerator:
             if __name__ == "__main__":
                 main()
         ''')
+
+    def _generate_test_run(self, ir: IRDocument, project_name: str) -> str:
+        """Generate a test_run.py at the project root for the execution runner."""
+        # Build state field initializers
+        state_lines = []
+        for f in ir.workflow.state_schema.fields:
+            t = f.type.value
+            if t == "string":
+                state_lines.append(f'    "{f.name}": ""')
+            elif t == "boolean":
+                state_lines.append(f'    "{f.name}": False')
+            elif t in ("dict", "object"):
+                state_lines.append(f'    "{f.name}": {{}}')
+            elif t in ("list", "array"):
+                state_lines.append(f'    "{f.name}": []')
+            elif t in ("integer", "number", "float"):
+                state_lines.append(f'    "{f.name}": 0')
+            else:
+                state_lines.append(f'    "{f.name}": None')
+        extra_state = ",\n".join(state_lines)
+
+        lines = [
+            f'"""Test runner for {ir.metadata.name} — LangGraph"""',
+            "import os",
+            "import sys",
+            "",
+            "from dotenv import load_dotenv",
+            "load_dotenv()",
+            "",
+            'api_key = os.environ.get("ANTHROPIC_API_KEY", "")',
+            "if not api_key:",
+            '    print("[TEST] ERROR: ANTHROPIC_API_KEY not set")',
+            "    sys.exit(1)",
+            "",
+            "from langchain_core.messages import HumanMessage",
+            "from .src.graph import build_graph",
+            "",
+            "",
+            "def run_test():",
+            '    print("[TEST] Building LangGraph workflow...")',
+            "    graph = build_graph()",
+            "",
+            '    test_input = os.environ.get("TEST_MESSAGE", "I need help with my billing issue.")',
+            "    initial_state = {",
+            '        "messages": [HumanMessage(content=test_input)],',
+        ]
+
+        if extra_state:
+            lines.append(extra_state + ",")
+
+        lines.extend([
+            "    }",
+            "",
+            '    print("[TEST] Running workflow with test input...")',
+            '    config = {"configurable": {"thread_id": "test-run-1"}}',
+            "",
+            "    try:",
+            "        result = graph.invoke(initial_state, config=config)",
+            '        print("[TEST] Workflow completed successfully")',
+            "",
+            '        if result.get("messages"):',
+            '            for msg in result["messages"]:',
+            "                role = msg.__class__.__name__",
+            '                content = msg.content if hasattr(msg, "content") else str(msg)',
+            '                print(f"[{role}]: {content[:500]}")',
+            "",
+            '        print("[ALL TESTS PASSED]")',
+            "    except Exception as e:",
+            '        print(f"[TEST] ERROR: {e}")',
+            "        sys.exit(1)",
+            "",
+            "",
+            'if __name__ == "__main__":',
+            "    run_test()",
+        ])
+
+        return "\n".join(lines)
 
     def _generate_dockerfile(self, project_name: str) -> str:
         return dedent(f"""\
