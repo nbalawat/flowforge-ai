@@ -8,8 +8,13 @@ The backend handles:
 - Project management and versioning
 """
 
+import base64
+import os
+from pathlib import Path
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 
 from .api.v1 import copilot, execution, generation, ir, projects
 from .config import settings
@@ -40,3 +45,19 @@ app.include_router(execution.router, prefix="/api/v1/execution", tags=["executio
 @app.get("/health")
 async def health_check():
     return {"status": "healthy", "service": settings.app_name}
+
+
+class ScreenshotPayload(BaseModel):
+    filename: str
+    data: str  # base64 encoded image data
+
+
+@app.post("/api/v1/screenshots")
+async def save_screenshot(payload: ScreenshotPayload):
+    """Save a base64-encoded screenshot to /app/screenshots/"""
+    screenshots_dir = Path("/app/screenshots")
+    screenshots_dir.mkdir(parents=True, exist_ok=True)
+    img_data = base64.b64decode(payload.data)
+    filepath = screenshots_dir / payload.filename
+    filepath.write_bytes(img_data)
+    return {"saved": str(filepath), "size": len(img_data)}

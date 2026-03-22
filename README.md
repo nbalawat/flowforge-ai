@@ -18,6 +18,52 @@
 
 ---
 
+## Screenshots
+
+### Welcome & Getting Started
+<p align="center">
+  <img src="docs/screenshots/01-welcome.png" alt="Welcome Screen" width="800" />
+</p>
+<p align="center"><em>Fresh canvas with guided onboarding — start from a template or describe your workflow to the AI Copilot</em></p>
+
+### Template Gallery
+<p align="center">
+  <img src="docs/screenshots/02-template-gallery.png" alt="Template Gallery" width="800" />
+</p>
+<p align="center"><em>8 pre-built workflow templates from Beginner to Expert — with difficulty badges, feature tags, and one-click loading</em></p>
+
+### Complex Workflow Canvas
+<p align="center">
+  <img src="docs/screenshots/03-complex-workflow.png" alt="Complex Workflow" width="800" />
+</p>
+<p align="center"><em>Enterprise Support Escalation workflow — 6 agents, conditions, HITL, tools, and multi-path routing on a visual canvas</em></p>
+
+### Node Properties & Configuration
+<p align="center">
+  <img src="docs/screenshots/04-node-properties.png" alt="Node Properties" width="800" />
+</p>
+<p align="center"><em>Click any node to view and edit its properties — agent config, tools, state schema, and inline prompt playground</em></p>
+
+### AI Copilot
+<p align="center">
+  <img src="docs/screenshots/05-ai-copilot.png" alt="AI Copilot" width="800" />
+</p>
+<p align="center"><em>Claude-powered copilot — describe what you want in natural language and watch the canvas update automatically</em></p>
+
+### About & Documentation
+<p align="center">
+  <img src="docs/screenshots/06-about-page.png" alt="About Page" width="800" />
+</p>
+<p align="center"><em>Built-in documentation page with feature overview, requirements, and getting started guide</em></p>
+
+### Command Palette
+<p align="center">
+  <img src="docs/screenshots/07-command-palette.png" alt="Command Palette" width="800" />
+</p>
+<p align="center"><em>Cmd+K command palette for quick actions — add nodes, switch frameworks, manage projects, and navigate templates</em></p>
+
+---
+
 ## Key Features
 
 | | Feature | Description |
